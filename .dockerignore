@@ -1,0 +1,4 @@
+**
+!pymosquitto/**
+!pyproject.toml
+!setup.py
