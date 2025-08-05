@@ -1,0 +1,39 @@
+x-template: &base
+  build: .
+  volumes:
+    - .:/app
+  working_dir: /app
+  init: true
+  network_mode: service:broker
+  environment:
+    MQTT_QOS: ${MQTT_QOS:-0}
+    MQTT_LIMIT: ${MQTT_LIMIT:-1000}
+    PUB_INTERVAL: ${PUB_INTERVAL:-5}
+
+services:
+  py:
+    <<: *base
+    volumes:
+      - .:/app
+      - ~/.pypirc:/root/.pypirc:ro
+    network_mode: bridge
+    command: /usr/bin/time -v python3 -c ""
+
+  broker:
+    image: eclipse-mosquitto:latest
+    init: true
+
+  sub:
+    <<: *base
+    depends_on:
+      - broker
+    command: /usr/bin/time -v python3 -m benchmarks.${PREFIX:-pymosq}_sub
+
+  pub:
+    image: eclipse-mosquitto:latest
+    network_mode: service:broker
+    init: true
+    depends_on:
+      - broker
+      - sub
+    command: sh -c "sleep 1 && mosquitto_pub -t "benchmark" -n --repeat 3000000 --repeat-delay ${PUB_INTERVAL:-5} --nodelay"

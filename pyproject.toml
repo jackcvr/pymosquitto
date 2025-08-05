@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pymosquitto"
+version = "0.1.0"
+description = "Lightweight Python MQTT client implemented as a simple wrapper over libmosquitto"
+requires-python = ">=3.8"
+readme = "README.md"
+license = "MIT"
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "twine",
+    "pytest",
+    "matplotlib",
+    "paho-mqtt",
+    "amqtt",
+]
+
+[tool.black]
+target-version = ["py313"]
+line-length = 119
