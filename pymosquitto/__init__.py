@@ -107,19 +107,21 @@ class MQTTClient:
             raise CLibError(f"{func.__name__} failed with error: {rc}/{msg}")
 
     def _set_callbacks(self):
-        self._lib_on_connect = CONNECT_CALLBACK(self._lib_on_connect)
-        self._lib_on_disconnect = DISCONNECT_CALLBACK(self._lib_on_disconnect)
-        self._lib_on_subscribe = SUBSCRIBE_CALLBACK(self._lib_on_subscribe)
-        self._lib_on_unsubscribe = UNSUBSCRIBE_CALLBACK(self._lib_on_unsubscribe)
-        self._lib_on_publish = PUBLISH_CALLBACK(self._lib_on_publish)
-        self._lib_on_message = MESSAGE_CALLBACK(self._lib_on_message)
-
+        self._wrap_callbacks()
         self.run(lib.mosquitto_connect_callback_set, self._lib_on_connect)
         self.run(lib.mosquitto_disconnect_callback_set, self._lib_on_disconnect)
         self.run(lib.mosquitto_subscribe_callback_set, self._lib_on_subscribe)
         self.run(lib.mosquitto_unsubscribe_callback_set, self._lib_on_unsubscribe)
         self.run(lib.mosquitto_publish_callback_set, self._lib_on_publish)
         self.run(lib.mosquitto_message_callback_set, self._lib_on_message)
+
+    def _wrap_callbacks(self):
+        self._lib_on_connect = CONNECT_CALLBACK(self._lib_on_connect)
+        self._lib_on_disconnect = DISCONNECT_CALLBACK(self._lib_on_disconnect)
+        self._lib_on_subscribe = SUBSCRIBE_CALLBACK(self._lib_on_subscribe)
+        self._lib_on_unsubscribe = UNSUBSCRIBE_CALLBACK(self._lib_on_unsubscribe)
+        self._lib_on_publish = PUBLISH_CALLBACK(self._lib_on_publish)
+        self._lib_on_message = MESSAGE_CALLBACK(self._lib_on_message)
 
     def connect(self, host, port=DEFAULT_PORT, keepalive=DEFAULT_KEEPALIVE):
         self.run(lib.mosquitto_connect, host.encode(), port, keepalive)
@@ -194,6 +196,10 @@ class MQTTClient:
 
     def remove_topic_handler(self, topic):
         del self.handlers[topic]
+
+    # -----------
+    # CALLBACKS
+    # -----------
 
     def _lib_on_connect(self, mosq, obj, rc):
         rc_desc = connack_string(rc)

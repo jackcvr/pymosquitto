@@ -8,7 +8,7 @@ Because memory matters.
 
 ## Usage
 
-benchmarks/pymo_sub.py
+examples/pymo_sub.py
 
 ```python
 import logging
@@ -30,7 +30,7 @@ with MQTTClient() as mqtt:
     mqtt.loop_forever()
 ```
 
-See more examples in bechmarks/ directory.
+See more in examples/ directory.
 
 ## License
 

@@ -16,12 +16,12 @@ services:
 
   pymo_sub:
     <<: *base
-    command: python3 -m benchmarks.pymo_sub
+    command: python3 -m examples.pymo_sub
 
   pymo_pub:
     <<: *base
-    command: python3 -m benchmarks.pymo_pub
+    command: python3 -m examples.pymo_pub
 
   paho_sub:
     <<: *base
-    command: python3 -m benchmarks.paho_sub
+    command: python3 -m examples.paho_sub
