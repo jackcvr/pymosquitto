@@ -8,3 +8,5 @@ RUN apt-get update \
       procps
 
 RUN pip3 install --break-system-packages paho-mqtt
+
+ENV PYTHONUNBUFFERED=1

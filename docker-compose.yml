@@ -1,21 +1,27 @@
+x-template: &base
+  build: .
+  volumes:
+    - .:/app
+  working_dir: /app
+  init: true
+  network_mode: service:broker
+
 services:
   broker:
     image: eclipse-mosquitto:latest
 
-  pymosq:
-    build: .
-    volumes:
-      - .:/app
-    working_dir: /app
-    init: true
-    network_mode: service:broker
-    command: python3 -u -m pymosquitto localhost topic1
+  py:
+    <<: *base
+    command: python3 -c "import signal; signal.pause()"
 
-  paho:
-    build: .
-    volumes:
-      - .:/app
-    working_dir: /app
-    init: true
-    network_mode: service:broker
-    command: python3 -u -m benchmarks.paho localhost topic1
+  pymo_sub:
+    <<: *base
+    command: python3 -m benchmarks.pymo_sub
+
+  pymo_pub:
+    <<: *base
+    command: python3 -m benchmarks.pymo_pub
+
+  paho_sub:
+    <<: *base
+    command: python3 -m benchmarks.paho_sub

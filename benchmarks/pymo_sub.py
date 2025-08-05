@@ -1,16 +1,3 @@
-# PyMosquitto
-
-~~Reincarnation of~~ Python ctypes binding for libmosquitto C library.
-
-Because memory matters.
-
-**Development in progress**
-
-## Usage
-
-benchmarks/pymo_sub.py
-
-```python
 import logging
 
 from pymosquitto import MQTTClient
@@ -28,10 +15,3 @@ with MQTTClient() as mqtt:
         print(msg.topic, repr(msg.payload))
 
     mqtt.loop_forever()
-```
-
-See more examples in bechmarks/ directory.
-
-## License
-
-MIT
