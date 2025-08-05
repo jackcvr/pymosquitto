@@ -1,0 +1,21 @@
+services:
+  broker:
+    image: eclipse-mosquitto:latest
+
+  pymosq:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    init: true
+    network_mode: service:broker
+    command: python3 -u -m pymosquitto localhost topic1
+
+  paho:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    init: true
+    network_mode: service:broker
+    command: python3 -u -m benchmarks.paho localhost topic1
