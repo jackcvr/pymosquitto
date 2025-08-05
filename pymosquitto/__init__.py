@@ -73,6 +73,8 @@ _instances: weakref.WeakValueDictionary[C.c_void_p, "MQTTClient"] = (
 
 @CONNECT_FUNC
 def _on_connect(mosq, _, reason):
+    if mosq not in _instances:
+        return
     client = _instances[mosq]
     reason_msg = connack_string(reason)
     if reason != 0:
@@ -87,6 +89,8 @@ def _on_connect(mosq, _, reason):
 
 @DISCONNECT_FUNC
 def _on_disconnect(mosq, _, reason):
+    if mosq not in _instances:
+        return
     client = _instances[mosq]
     with client.cond:
         client.is_connected = False
@@ -100,6 +104,8 @@ def _on_disconnect(mosq, _, reason):
 
 @MESSAGE_FUNC
 def _on_message(mosq, _, msg):
+    if mosq not in _instances:
+        return
     client = _instances[mosq]
     msg = msg.contents.as_mqtt_message()
     client.logger.debug("RECV: %s", msg)
@@ -111,7 +117,7 @@ def _on_publish(mosq, _, mid):
     if mosq not in _instances:
         return
     client = _instances[mosq]
-    client.logger.debug("PUB_DONE [mid=%d]", mid)
+    client.logger.debug("PUB_DONE: (mid=%d)", mid)
     client.on_publish(mid)
 
 
@@ -175,7 +181,7 @@ class MQTTClient:
             self.topics[topic] = qos
             if self.is_connected:
                 self.run(lib.mosquitto_subscribe, None, topic.encode(), qos)
-                self.logger.info("SUB/%d %s", qos, topic)
+                self.logger.info("SUB_SENT: (topic=%s qos=%d)", topic, qos)
 
     def loop_start(self):
         with self.cond:
@@ -209,7 +215,11 @@ class MQTTClient:
             False,
         )
         self.logger.debug(
-            "PUB_SENT[mid=%d qos=%d] %s: %s", c_mid.value, qos, topic, payload
+            "PUB_SENT: (mid=%d topic=%s qos=%d payload=%s)",
+            c_mid.value,
+            topic,
+            qos,
+            payload,
         )
         return c_mid.value
 
