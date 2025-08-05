@@ -6,14 +6,6 @@ Because memory matters.
 
 **Development in progress**
 
----
-
-TODO:
-
-- add SUB/UNSUB callbacks
-
----
-
 ## Usage
 
 benchmarks/pymo_sub.py

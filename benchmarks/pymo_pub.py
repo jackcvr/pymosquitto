@@ -1,11 +1,14 @@
 import time
 import threading
+import logging
 from pymosquitto import MQTTClient
 
 from . import config as c
 
 TOPIC = "test-topic"
 MESSAGE = "test-message"
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 def publisher(client, topic, msg):

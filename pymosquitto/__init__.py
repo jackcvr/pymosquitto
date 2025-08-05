@@ -1,22 +1,13 @@
 import ctypes as C
 from ctypes.util import find_library
 import atexit
-import weakref
 import threading
 import logging
 import typing as t
 
-lib = C.cdll.LoadLibrary(find_library("mosquitto"))
-lib.mosquitto_new.use_errno = True  # type: ignore[attr-defined]
-lib.mosquitto_new.restype = C.c_void_p
-lib.mosquitto_strerror.restype = C.c_char_p
-lib.mosquitto_connack_string.restype = C.c_char_p
 
-CONNECT_FUNC = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-lib.mosquitto_connect_callback_set.argtypes = (C.c_void_p, CONNECT_FUNC)
-
-DISCONNECT_FUNC = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-lib.mosquitto_disconnect_callback_set.argtypes = (C.c_void_p, DISCONNECT_FUNC)
+class CLibError(RuntimeError):
+    pass
 
 
 class MQTTMessage(t.NamedTuple):
@@ -47,13 +38,6 @@ class MosqMessage(C.Structure):
         )
 
 
-MESSAGE_FUNC = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(MosqMessage))
-lib.mosquitto_message_callback_set.argtypes = (C.c_void_p, MESSAGE_FUNC)
-
-PUBLISH_FUNC = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-lib.mosquitto_publish_callback_set.argtypes = (C.c_void_p, PUBLISH_FUNC)
-
-
 def strerror(rc):
     return C.c_char_p(lib.mosquitto_strerror(rc)).value.decode()
 
@@ -62,67 +46,30 @@ def connack_string(rc):
     return C.c_char_p(lib.mosquitto_connack_string(rc)).value.decode()
 
 
+CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
+DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
+SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
+    None, C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.POINTER(C.c_int)
+)
+UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
+MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(MosqMessage))
+PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
+
+lib = C.cdll.LoadLibrary(find_library("mosquitto"))
+lib.mosquitto_new.use_errno = True  # type: ignore[attr-defined]
+lib.mosquitto_new.restype = C.c_void_p
+lib.mosquitto_strerror.restype = C.c_char_p
+lib.mosquitto_connack_string.restype = C.c_char_p
+lib.mosquitto_connect_callback_set.argtypes = (C.c_void_p, CONNECT_CALLBACK)
+lib.mosquitto_disconnect_callback_set.argtypes = (C.c_void_p, DISCONNECT_CALLBACK)
+lib.mosquitto_subscribe_callback_set.argtypes = (C.c_void_p, SUBSCRIBE_CALLBACK)
+lib.mosquitto_unsubscribe_callback_set.argtypes = (C.c_void_p, UNSUBSCRIBE_CALLBACK)
+lib.mosquitto_message_callback_set.argtypes = (C.c_void_p, MESSAGE_CALLBACK)
+lib.mosquitto_publish_callback_set.argtypes = (C.c_void_p, PUBLISH_CALLBACK)
+
 C.set_errno(0)
 lib.mosquitto_lib_init()
 atexit.register(lib.mosquitto_lib_cleanup)
-
-_instances: weakref.WeakValueDictionary[C.c_void_p, "MQTTClient"] = (
-    weakref.WeakValueDictionary()
-)
-
-
-@CONNECT_FUNC
-def _on_connect(mosq, _, reason):
-    if mosq not in _instances:
-        return
-    client = _instances[mosq]
-    reason_msg = connack_string(reason)
-    if reason != 0:
-        client.logger.warning("Connection failed: %s", reason_msg)
-        return
-    with client.cond:
-        client.is_connected = True
-        client.logger.info("Connected: %s", reason_msg)
-        client.cond.notify_all()
-    client.on_connect(reason)
-
-
-@DISCONNECT_FUNC
-def _on_disconnect(mosq, _, reason):
-    if mosq not in _instances:
-        return
-    client = _instances[mosq]
-    with client.cond:
-        client.is_connected = False
-        if reason == 0:
-            client.logger.info("Disconnected")
-        else:
-            client.logger.warning("Disconnected: %s", connack_string(reason))
-        client.cond.notify_all()
-    client.on_disconnect(reason)
-
-
-@MESSAGE_FUNC
-def _on_message(mosq, _, msg):
-    if mosq not in _instances:
-        return
-    client = _instances[mosq]
-    msg = msg.contents.as_mqtt_message()
-    client.logger.debug("RECV: %s", msg)
-    client.on_message(msg)
-
-
-@PUBLISH_FUNC
-def _on_publish(mosq, _, mid):
-    if mosq not in _instances:
-        return
-    client = _instances[mosq]
-    client.logger.debug("PUB_DONE: (mid=%d)", mid)
-    client.on_publish(mid)
-
-
-class CLibError(RuntimeError):
-    pass
 
 
 class MQTTClient:
@@ -143,7 +90,6 @@ class MQTTClient:
         self.cond = threading.Condition(threading.Lock())
         self._in_thread = False
         self._set_callbacks()
-        _instances[self._mosq] = self
 
     def __enter__(self):
         return self
@@ -161,10 +107,19 @@ class MQTTClient:
             raise CLibError(f"{func.__name__} failed with error: {rc}/{msg}")
 
     def _set_callbacks(self):
-        self.run(lib.mosquitto_connect_callback_set, _on_connect)
-        self.run(lib.mosquitto_disconnect_callback_set, _on_disconnect)
-        self.run(lib.mosquitto_message_callback_set, _on_message)
-        self.run(lib.mosquitto_publish_callback_set, _on_publish)
+        self._lib_on_connect = CONNECT_CALLBACK(self._lib_on_connect)
+        self._lib_on_disconnect = DISCONNECT_CALLBACK(self._lib_on_disconnect)
+        self._lib_on_subscribe = SUBSCRIBE_CALLBACK(self._lib_on_subscribe)
+        self._lib_on_unsubscribe = UNSUBSCRIBE_CALLBACK(self._lib_on_unsubscribe)
+        self._lib_on_publish = PUBLISH_CALLBACK(self._lib_on_publish)
+        self._lib_on_message = MESSAGE_CALLBACK(self._lib_on_message)
+
+        self.run(lib.mosquitto_connect_callback_set, self._lib_on_connect)
+        self.run(lib.mosquitto_disconnect_callback_set, self._lib_on_disconnect)
+        self.run(lib.mosquitto_subscribe_callback_set, self._lib_on_subscribe)
+        self.run(lib.mosquitto_unsubscribe_callback_set, self._lib_on_unsubscribe)
+        self.run(lib.mosquitto_publish_callback_set, self._lib_on_publish)
+        self.run(lib.mosquitto_message_callback_set, self._lib_on_message)
 
     def connect(self, host, port=DEFAULT_PORT, keepalive=DEFAULT_KEEPALIVE):
         self.run(lib.mosquitto_connect, host.encode(), port, keepalive)
@@ -175,13 +130,6 @@ class MQTTClient:
     def wait_connection(self, timeout=None):
         with self.cond:
             self.cond.wait_for(lambda: self.is_connected, timeout=timeout)
-
-    def subscribe(self, topic, qos=0):
-        with self.cond:
-            self.topics[topic] = qos
-            if self.is_connected:
-                self.run(lib.mosquitto_subscribe, None, topic.encode(), qos)
-                self.logger.info("SUB_SENT: (topic=%s qos=%d)", topic, qos)
 
     def loop_start(self):
         with self.cond:
@@ -202,6 +150,13 @@ class MQTTClient:
                 self.run(lib.mosquitto_loop_stop, True)
             self.run(lib.mosquitto_destroy)
             self._mosq = None
+
+    def subscribe(self, topic, qos=0):
+        with self.cond:
+            self.topics[topic] = qos
+            if self.is_connected:
+                self.run(lib.mosquitto_subscribe, None, topic.encode(), qos)
+                self.logger.debug("SUB_SENT: (topic=%s qos=%d)", topic, qos)
 
     def publish(self, topic, payload, qos=0):
         c_mid = C.c_int(0)
@@ -240,17 +195,62 @@ class MQTTClient:
     def remove_topic_handler(self, topic):
         del self.handlers[topic]
 
-    def on_connect(self, rc):
+    def _lib_on_connect(self, mosq, obj, rc):
+        rc_desc = connack_string(rc)
+        if rc != 0:
+            self.logger.warning("Connection failed: %s", rc_desc)
+            return
+        with self.cond:
+            self.is_connected = True
+            self.logger.info("Connected: %s", rc_desc)
+            self.cond.notify_all()
+        self._on_connect(rc)
+
+    def _on_connect(self, rc):
         for topic, qos in self.topics.items():
             self.subscribe(topic, qos)
 
-    def on_disconnect(self, rc):
+    def _lib_on_disconnect(self, mosq, obj, rc):
+        with self.cond:
+            self.is_connected = False
+            if rc == 0:
+                self.logger.info("Disconnected")
+            else:
+                self.logger.warning("Disconnected: %s", connack_string(rc))
+            self.cond.notify_all()
+        self._on_disconnect(rc)
+
+    def _on_disconnect(self, rc):
         pass
 
-    def on_publish(self, mid):
+    def _lib_on_subscribe(self, mosq, obj, mid, qos_count, granted_qos):
+        qos_list = [granted_qos[i] for i in range(qos_count)]
+        self.logger.info("SUB: (mid=%d granted_qos=%s)", mid, qos_list)
+        self._on_subscribe(mid, qos_list)
+
+    def _on_subscribe(self, mid, qos_list):
         pass
 
-    def on_message(self, msg):
+    def _lib_on_unsubscribe(self, mosq, obj, mid):
+        self.logger.debug("UNSUB: (mid=%d)", mid)
+        self._on_unsubscribe(mid)
+
+    def _on_unsubscribe(self, mid):
+        pass
+
+    def _lib_on_publish(self, mosq, obj, mid):
+        self.logger.debug("PUB: (mid=%d)", mid)
+        self._on_publish(mid)
+
+    def _on_publish(self, mid):
+        pass
+
+    def _lib_on_message(self, mosq, obj, msg):
+        msg = msg.contents.as_mqtt_message()
+        self.logger.debug("RECV: %s", msg)
+        self._on_message(msg)
+
+    def _on_message(self, msg):
         if not self.handlers:
             return
         for handler in self.handlers.find(msg.topic):
