@@ -1,12 +1,8 @@
-FROM debian:bookworm-slim
+FROM python:3.8-slim
 
 RUN apt-get update \
-    && apt-get install -y \
-      mosquitto-clients \
-      libmosquitto-dev \
-      python3-pip \
-      procps
+    && apt-get install -y gdb libmosquitto-dev procps
 
-RUN pip3 install --break-system-packages paho-mqtt
+RUN pip install --break-system-packages paho-mqtt
 
 ENV PYTHONUNBUFFERED=1

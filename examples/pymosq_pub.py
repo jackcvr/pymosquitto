@@ -19,9 +19,9 @@ def publisher(client, topic, msg):
         time.sleep(10)
 
 
-with MQTTClient() as mqtt:
-    t = threading.Thread(target=publisher, args=(mqtt, TOPIC, MESSAGE), daemon=True)
+with MQTTClient() as client:
+    t = threading.Thread(target=publisher, args=(client, TOPIC, MESSAGE), daemon=True)
     t.start()
-    mqtt.connect_async(c.HOST, c.PORT)
-    mqtt.loop_forever()
+    client.connect_async(c.HOST, c.PORT)
+    client.loop_forever()
     t.join()

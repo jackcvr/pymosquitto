@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pymosquitto"
 version = "0.1.0"
-description = "Python binding for libmosquitto"
+description = "Lightweight Python MQTT client wrapping libmosquitto C library via ctypes"
 requires-python = ">=3.8"
 dependencies = []
 

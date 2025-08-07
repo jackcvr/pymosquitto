@@ -14,13 +14,14 @@ services:
     <<: *base
     command: python3 -c "import signal; signal.pause()"
 
-  pymo_sub:
+  pymosq_sub:
     <<: *base
-    command: python3 -m examples.pymo_sub
+    command: python3 -m examples.pymosq_sub
+    # command: gdb -ex r --args python3 -m examples.pymosq_sub
 
-  pymo_pub:
+  pymosq_pub:
     <<: *base
-    command: python3 -m examples.pymo_pub
+    command: python3 -m examples.pymosq_pub
 
   paho_sub:
     <<: *base

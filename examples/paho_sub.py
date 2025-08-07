@@ -1,19 +1,15 @@
-import logging
-
 import paho.mqtt.client as mqtt
 
 from . import config as c
 
-logging.basicConfig(level=logging.INFO)
-
 
 def on_connect(client, userdata, flags, rc, props):
-    logging.info("Connected with result code: %s", rc)
+    print("Connected:", rc)
     client.subscribe(c.TOPIC)
 
 
 def on_message(client, userdata, msg):
-    logging.info("RECV %s: %s", msg.topic, msg.payload)
+    print(msg.topic, repr(msg.payload))
 
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)

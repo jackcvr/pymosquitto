@@ -1,0 +1,26 @@
+x-template: &base
+  build: .
+  volumes:
+    - .:/app
+  working_dir: /app
+  init: true
+  network_mode: service:broker
+  environment:
+#    MQTT_LIMIT: 1000
+    MQTT_QOS: 0
+
+services:
+  broker:
+    image: eclipse-mosquitto:latest
+
+  sub:
+    <<: *base
+    depends_on:
+      - broker
+    command: python3 -m benchmarks.pymosq_sub
+
+  pub:
+    <<: *base
+    depends_on:
+      - sub
+    command: sh -c "sleep 1 && python3 -m benchmarks.pymosq_pub"

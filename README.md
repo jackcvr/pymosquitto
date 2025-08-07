@@ -1,36 +1,45 @@
 # PyMosquitto
 
-~~Reincarnation of~~ Python ctypes binding for libmosquitto C library.
+Lightweight Python MQTT client wrapping libmosquitto C library via ctypes.
 
-Because memory matters.
+**Development in progress**:
 
-**Development in progress**
+TODO:
+
+- tests
+- benchmarks
+
+## Dependencies
+
+- python3.8+
+- libmosquitto-dev
+
+## Installation
+
+- TODO
 
 ## Usage
 
 examples/pymo_sub.py
 
 ```python
-import logging
-
 from pymosquitto import MQTTClient
 
 from . import config as c
 
-logging.basicConfig(level=logging.DEBUG)
+with MQTTClient() as client:
 
-with MQTTClient() as mqtt:
-    mqtt.connect_async(c.HOST, c.PORT)
-    mqtt.subscribe(c.TOPIC, c.QOS)
-
-    @mqtt.topic_handler(c.TOPIC)
-    def test_handler(client, msg):
+    @client.topic_handler(c.TOPIC)
+    def _(client, userdata, msg):
         print(msg.topic, repr(msg.payload))
 
-    mqtt.loop_forever()
+    client.connect_async(c.HOST, c.PORT)
+    client.subscribe(c.TOPIC, c.QOS)
+    client.loop_forever()
+
 ```
 
-See more in examples/ directory.
+See more in the `examples/` and `benchmarks/` directories.
 
 ## License
 
