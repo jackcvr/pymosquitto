@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+export PREFIX=${PREFIX:-"paho"}
+
 COMPOSE="docker compose -f docker-compose.bench.yml"
 
 cleanup() {

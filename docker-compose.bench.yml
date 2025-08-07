@@ -12,15 +12,17 @@ x-template: &base
 services:
   broker:
     image: eclipse-mosquitto:latest
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
   sub:
     <<: *base
     depends_on:
       - broker
-    command: python3 -m benchmarks.pymosq_sub
+    command: /usr/bin/time -v python3 -m benchmarks.${PREFIX}_sub
 
   pub:
     <<: *base
     depends_on:
       - sub
-    command: sh -c "sleep 1 && python3 -m benchmarks.pymosq_pub"
+    command: bash -c "/usr/bin/time -v python3 -m benchmarks.${PREFIX}_pub"

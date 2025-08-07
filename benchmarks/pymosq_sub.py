@@ -1,22 +1,17 @@
-import time
-import types
-
 from pymosquitto import MQTTClient
 
 from . import config as c
 
-data = types.SimpleNamespace(count=0, start_time=None)
+count = 0
 
-with MQTTClient(userdata=data) as client:
+with MQTTClient() as client:
 
     @client.on_message_handler
     def _(client, userdata, msg):
-        if userdata.count == 0:
-            userdata.start_time = time.monotonic()
-        userdata.count += 1
-        if userdata.count == c.LIMIT:
-            print(f"Done[qos={c.QOS}]:", time.monotonic() - userdata.start_time)
-            client.close()
+        global count
+        count += 1
+        if count == c.LIMIT:
+            client.disconnect()
 
     client.connect_async(c.HOST, c.PORT)
     client.subscribe(c.TOPIC, c.QOS)
