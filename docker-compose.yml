@@ -16,13 +16,18 @@ services:
 
   pymosq_sub:
     <<: *base
-    command: python3 -m examples.pymosq_sub
-    # command: gdb -ex r --args python3 -m examples.pymosq_sub
+    command: python3 -m benchmarks.pymosq_sub
+
+  pymosq_sub_base:
+    <<: *base
+    command: python3 -m benchmarks.pymosq_sub_base
 
   pymosq_pub:
     <<: *base
-    command: python3 -m examples.pymosq_pub
+    command: python3 -m benchmarks.pymosq_pub
+    environment:
+      PUB_INTERVAL: 5
 
   paho_sub:
     <<: *base
-    command: python3 -m examples.paho_sub
+    command: python3 -m benchmarks.paho_sub

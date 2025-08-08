@@ -1,18 +1,19 @@
-from pymosquitto import MQTTClient
+from pymosquitto.client import MQTTClient
 
 from . import config as c
 
+
+def on_message(client, userdata, msg):
+    global count
+    print("MSG", msg)
+    count += 1
+    if count == c.LIMIT:
+        client.disconnect()
+
+
 count = 0
-
-with MQTTClient() as client:
-
-    @client.on_message_handler
-    def _(client, userdata, msg):
-        global count
-        count += 1
-        if count == c.LIMIT:
-            client.disconnect()
-
-    client.connect_async(c.HOST, c.PORT)
-    client.subscribe(c.TOPIC, c.QOS)
-    client.loop_forever()
+client = MQTTClient()
+client.on_message = on_message
+client.subscribe_lazy(c.TOPIC, c.QOS)
+client.connect_async(c.HOST, c.PORT)
+client.loop_forever()

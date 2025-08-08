@@ -20,29 +20,34 @@ TODO:
 
 ## Usage
 
-examples/pymosq_sub.py
-
 ```python
-from pymosquitto import MQTTClient
+from pymosquitto.client import MQTTClient
 
-from .config import HOST, PORT, TOPIC, QOS
 
-with MQTTClient() as client:
+def on_message(client, userdata, msg):
+    global count
+    print("MSG", msg)
+    count += 1
+    if count == 10:
+        client.disconnect()
 
-    @client.topic_handler(TOPIC)
-    def _(client, userdata, msg):
-        print(msg.topic, repr(msg.payload))
 
-    client.connect_async(HOST, PORT)
-    client.subscribe(TOPIC, QOS)
-    client.loop_forever()
+count = 0
+client = MQTTClient()
+client.on_message = on_message
+client.subscribe_lazy("#", qos=0)
+client.connect_async("localhost", 1883)
+client.loop_forever()
 ```
 
-See more in the `examples/` and `benchmarks/` directories.
+See more in the `benchmarks/` directory.
 
-## Benchmark
+## Benchmarks
 
-PyMosquitto (qos 0)
+- uses 6MB less memory than PahoMQTT on IDLE
+- 4x times faster
+
+PyMosquitto
 
 ```bash
 pub-1     | 	Command being timed: "python3 -m benchmarks.pymosq_pub"
@@ -60,7 +65,7 @@ sub-1     | 	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:06.31
 sub-1     | 	Maximum resident set size (kbytes): 13344
 ```
 
-PahoMQTT (qos 0)
+PahoMQTT
 
 ```bash
 pub-1     | 	Command being timed: "python3 -m benchmarks.paho_pub"

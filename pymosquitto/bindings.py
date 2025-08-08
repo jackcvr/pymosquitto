@@ -19,8 +19,8 @@ SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
     None, C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.POINTER(C.c_int)
 )
 UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(CMessage))
 PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
+MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(CMessage))
 
 
 lib = C.cdll.LoadLibrary(find_library("mosquitto"))
@@ -106,10 +106,10 @@ lib.mosquitto_subscribe_callback_set.restype = None
 lib.mosquitto_unsubscribe_callback_set.argtypes = (C.c_void_p, UNSUBSCRIBE_CALLBACK)
 lib.mosquitto_unsubscribe_callback_set.restype = None
 
-# void mosquitto_message_callback_set(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, const struct mosquitto_message *))
-lib.mosquitto_message_callback_set.argtypes = (C.c_void_p, MESSAGE_CALLBACK)
-lib.mosquitto_message_callback_set.restype = None
-
 # void mosquitto_publish_callback_set(struct mosquitto *mosq, void (*on_publish)(struct mosquitto *, void *, int))
 lib.mosquitto_publish_callback_set.argtypes = (C.c_void_p, PUBLISH_CALLBACK)
 lib.mosquitto_publish_callback_set.restype = None
+
+# void mosquitto_message_callback_set(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, const struct mosquitto_message *))
+lib.mosquitto_message_callback_set.argtypes = (C.c_void_p, MESSAGE_CALLBACK)
+lib.mosquitto_message_callback_set.restype = None
