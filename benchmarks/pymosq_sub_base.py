@@ -10,7 +10,7 @@ def on_connect(mosq, userdata, rc):
 
 def on_message(mosq, userdata, msg):
     global count
-    msg = MQTTMessage.from_cmessage(msg)
+    msg = MQTTMessage.from_c(msg)
     print("MSG", msg)
     count += 1
     if count == c.LIMIT:

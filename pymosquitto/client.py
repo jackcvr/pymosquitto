@@ -52,14 +52,14 @@ class MQTTClient(Mosquitto):
     def is_connected(self):
         return self._is_connected
 
-    def _run(self, lib_func, *args):
+    def _call(self, lib_func, *args):
         if self._logger:
             self._logger.debug(
-                "Executing C function: %s%s",
+                "C call: %s%s",
                 lib_func.__name__,
                 (self._mosq,) + args,
             )
-        super()._run(lib_func, *args)
+        super()._call(lib_func, *args)
 
     def _set_lib_callbacks(self):
         self.connect_callback_set(self._on_connect)
@@ -174,7 +174,7 @@ class MQTTClient(Mosquitto):
             self._publish_callback(self, to_python(userdata), mid)
 
     def _on_message(self, mosq, userdata, msg):
-        msg = MQTTMessage.from_cmessage(msg)
+        msg = MQTTMessage.from_c(msg)
         if self._logger:
             self._logger.debug("RECV: %s", msg)
         if self._message_callback:

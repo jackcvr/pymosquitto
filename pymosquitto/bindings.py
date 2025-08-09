@@ -1,6 +1,28 @@
 import ctypes as C
 from ctypes.util import find_library
 
+_lib_name = find_library("mosquitto")
+if _lib_name is None:
+    raise ImportError("libmosquitto not found. Please install libmosquitto1")
+
+lib = C.cdll.LoadLibrary(_lib_name)
+del _lib_name
+
+lib.mosquitto_lib_version.argtypes = (
+    C.POINTER(C.c_int),
+    C.POINTER(C.c_int),
+    C.POINTER(C.c_int),
+)
+lib.mosquitto_lib_version.restype = C.c_int
+
+_major = C.c_int()
+lib.mosquitto_lib_version(C.byref(_major), None, None)
+
+MIN_MAJOR = 2
+if _major.value < MIN_MAJOR:
+    raise RuntimeError(f"libmosquitto version {MIN_MAJOR}+ required")
+del _major
+
 
 class CMessage(C.Structure):
     _fields_ = (
@@ -22,9 +44,6 @@ UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
 PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
 MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(CMessage))
 
-
-lib = C.cdll.LoadLibrary(find_library("mosquitto"))
-
 # const char *mosquitto_strerror(int mosq_errno)
 lib.mosquitto_strerror.argtypes = (C.c_int,)
 lib.mosquitto_strerror.restype = C.c_char_p
@@ -32,6 +51,10 @@ lib.mosquitto_strerror.restype = C.c_char_p
 # const char *mosquitto_connack_string(int connack_code)
 lib.mosquitto_connack_string.argtypes = (C.c_int,)
 lib.mosquitto_connack_string.restype = C.c_char_p
+
+# const char *mosquitto_reason_string(int reason_code)
+lib.mosquitto_reason_string.argtypes = (C.c_int,)
+lib.mosquitto_reason_string.restype = C.c_char_p
 
 # int mosquitto_lib_init(void)
 lib.mosquitto_lib_init.argtypes = tuple()

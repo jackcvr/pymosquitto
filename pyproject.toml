@@ -9,6 +9,12 @@ description = "Lightweight Python MQTT client wrapping libmosquitto C library vi
 requires-python = ">=3.8"
 dependencies = []
 
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "paho-mqtt",
+]
+
 [tool.black]
 target-version = ["py313"]
 line-length = 119
