@@ -5,8 +5,8 @@ from pymosquitto.bindings import lib
 
 EXCLUDE = (
     "mosquitto_lib_init",
-    "mosquitto_new",
     "mosquitto_lib_cleanup",
+    "mosquitto_new",
 )
 
 
@@ -20,6 +20,7 @@ def mosq():
     if rc != 0:
         raise Exception(f"mosquitto_lib_init error: {_strerror(rc)}")
     try:
+        C.set_errno(0)
         obj = lib.mosquitto_new(None, True, None)
         rc = C.get_errno()
         if rc != 0:

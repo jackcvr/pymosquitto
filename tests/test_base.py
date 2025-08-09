@@ -2,13 +2,16 @@ import threading
 
 import pytest
 from pymosquitto import base
-from pymosquitto.base import MosquittoError
 
 
 def _offload(func, *args, **kwargs):
     t = threading.Thread(target=func, args=args, kwargs=kwargs)
     t.start()
     return t
+
+
+def test_call():
+    pass
 
 
 def test_strerror():
@@ -35,17 +38,14 @@ def test_init_and_destroy():
 
 
 def test_connect():
-    done = threading.Event()
-
-    def _on_disconnect(client, userdata, rc):
-        print("DSFDSF", rc)
-        done.set()
-
     client = base.Mosquitto()
-    client.disconnect_callback_set(_on_disconnect)
-
-    with pytest.raises(MosquittoError) as e:
+    with pytest.raises(ConnectionRefusedError):
         client.connect("localhost")
-    # time.sleep(1)
-    print("ERR", e.value)
-    assert e.value.code == base.ErrorCode.ERRNO  # FIX IT
+
+
+def test_connect_async():
+    client = base.Mosquitto()
+    with pytest.raises(ConnectionRefusedError):
+        client.connect_async("localhost")
+    with pytest.raises(ConnectionRefusedError):
+        client.reconnect_async()

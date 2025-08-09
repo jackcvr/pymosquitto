@@ -6,13 +6,14 @@ Lightweight Python MQTT client wrapping libmosquitto C library via ctypes.
 
 TODO:
 
-- tests
+- add on log callback
+- add more tests
 - benchmarks
 
 ## Dependencies
 
 - python3.8+
-- libmosquitto-dev
+- libmosquitto1
 
 ## Installation
 

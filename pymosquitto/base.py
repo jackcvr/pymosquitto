@@ -1,5 +1,6 @@
 import ctypes as C
 import atexit
+import os
 import weakref
 import typing as t
 import enum
@@ -111,7 +112,7 @@ class ReasonCode(enum.IntEnum):
     WILDCARD_SUBS_NOT_SUPPORTED = 162
 
 
-class MosquittoError(RuntimeError):
+class MosquittoError(Exception):
     def __init__(self, func, code):
         self.func_name = func.__name__
         self.code = code
@@ -155,13 +156,22 @@ def to_python(obj):
     return C.cast(obj, C.py_object).value
 
 
-def call(func, *args):
+def call(func, *args, use_errno=False):
+    if use_errno:
+        C.set_errno(0)
     rc = func(*args)
-    if isinstance(rc, int) and rc != 0:
+    if use_errno or rc == ErrorCode.ERRNO:
+        errno = C.get_errno()
+        if errno != 0:
+            raise OSError(errno, os.strerror(errno))
+        return rc
+    if rc == 0:
+        return rc
+    elif isinstance(rc, int):
         raise MosquittoError(func, rc)
+    return rc
 
 
-C.set_errno(0)
 call(lib.mosquitto_lib_init)
 atexit.register(lib.mosquitto_lib_cleanup)
 
@@ -170,10 +180,9 @@ class Mosquitto:
     def __init__(self, client_id=None, clean_start=True, userdata=None):
         if client_id:
             client_id = client_id.encode()
-        self._mosq = lib.mosquitto_new(client_id, clean_start, userdata)
-        rc = C.get_errno()
-        if rc != 0:
-            raise MosquittoError(lib.mosquitto_new, rc)
+        self._mosq = call(
+            lib.mosquitto_new, client_id, clean_start, userdata, use_errno=True
+        )
         self._finalizer = weakref.finalize(
             self, call, lib.mosquitto_destroy, self._mosq
         )
@@ -184,8 +193,8 @@ class Mosquitto:
         self.__publish_callback = None
         self.__message_callback = None
 
-    def _call(self, lib_func, *args):
-        call(lib_func, self._mosq, *args)
+    def _call(self, func, *args):
+        call(func, self._mosq, *args)
 
     def destroy(self):
         if self._finalizer.alive:
@@ -196,6 +205,19 @@ class Mosquitto:
 
     def connect_async(self, host, port=1883, keepalive=60):
         self._call(lib.mosquitto_connect_async, host.encode(), port, keepalive)
+
+    def reconnect_async(self):
+        self._call(lib.mosquitto_reconnect_async)
+
+    def reconnect_delay_set(
+        self, reconnect_delay, reconnect_delay_max, reconnect_exponential_backoff=False
+    ):
+        self._call(
+            lib.mosquitto_reconnect_delay_set,
+            reconnect_delay,
+            reconnect_delay_max,
+            reconnect_exponential_backoff,
+        )
 
     def disconnect(self):
         self._call(lib.mosquitto_disconnect)

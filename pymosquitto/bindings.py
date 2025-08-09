@@ -5,7 +5,7 @@ _lib_name = find_library("mosquitto")
 if _lib_name is None:
     raise ImportError("libmosquitto not found. Please install libmosquitto1")
 
-lib = C.cdll.LoadLibrary(_lib_name)
+lib = C.CDLL(_lib_name, use_errno=True)
 del _lib_name
 
 lib.mosquitto_lib_version.argtypes = (
@@ -15,13 +15,16 @@ lib.mosquitto_lib_version.argtypes = (
 )
 lib.mosquitto_lib_version.restype = C.c_int
 
-_major = C.c_int()
-lib.mosquitto_lib_version(C.byref(_major), None, None)
+VERSION = (C.c_int(), C.c_int(), C.c_int())
+lib.mosquitto_lib_version(C.byref(VERSION[0]), C.byref(VERSION[1]), C.byref(VERSION[2]))
 
-MIN_MAJOR = 2
-if _major.value < MIN_MAJOR:
-    raise RuntimeError(f"libmosquitto version {MIN_MAJOR}+ required")
-del _major
+MIN_VERSION = (2, 0, 0)
+if (
+    VERSION[0].value < MIN_VERSION[0]
+    or VERSION[1].value < MIN_VERSION[1]
+    or VERSION[2].value < MIN_VERSION[2]
+):
+    raise RuntimeError(f"libmosquitto version {MIN_VERSION}+ required")
 
 
 class CMessage(C.Structure):
@@ -67,7 +70,6 @@ lib.mosquitto_lib_cleanup.restype = C.c_int
 # struct mosquitto *mosquitto_new(const char *id, bool clean_start, void *userdata)
 lib.mosquitto_new.argtypes = (C.c_char_p, C.c_bool, C.py_object)
 lib.mosquitto_new.restype = C.c_void_p
-lib.mosquitto_new.use_errno = True  # type: ignore[attr-defined]
 
 # void mosquitto_destroy(struct mosquitto *mosq)
 lib.mosquitto_destroy.argtypes = (C.c_void_p,)
@@ -80,6 +82,14 @@ lib.mosquitto_connect.restype = C.c_int
 # int mosquitto_connect_async(struct mosquitto *mosq, const char *host, int port, int keepalive)
 lib.mosquitto_connect_async.argtypes = (C.c_void_p, C.c_char_p, C.c_int, C.c_int)
 lib.mosquitto_connect_async.restype = C.c_int
+
+# int mosquitto_reconnect_async(struct mosquitto *mosq)
+lib.mosquitto_reconnect_async.argtypes = (C.c_void_p,)
+lib.mosquitto_reconnect_async.restype = C.c_int
+
+# int mosquitto_reconnect_delay_set(struct mosquitto *mosq, unsigned int reconnect_delay, unsigned int reconnect_delay_max, bool reconnect_exponential_backoff)
+lib.mosquitto_reconnect_delay_set.argtypes = (C.c_void_p, C.c_uint, C.c_uint, C.c_bool)
+lib.mosquitto_reconnect_delay_set.restype = C.c_int
 
 # int mosquitto_disconnect(struct mosquitto *mosq)
 lib.mosquitto_disconnect.argtypes = (C.c_void_p,)

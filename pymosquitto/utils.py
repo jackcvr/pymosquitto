@@ -1,4 +1,4 @@
-import threading
+from contextlib import nullcontext
 
 
 class TopicMatcher:
@@ -9,9 +9,9 @@ class TopicMatcher:
             self.children = {}
             self.value = None
 
-    def __init__(self):
+    def __init__(self, lock=None):
         self._root = self.Node()
-        self._lock = threading.Lock()
+        self._lock = lock or nullcontext()
 
     def __setitem__(self, key, value):
         with self._lock:

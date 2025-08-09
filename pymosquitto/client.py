@@ -1,12 +1,21 @@
 import threading
 
-from .base import Mosquitto, to_python, connack_string, MQTTMessage, MosquittoError
-
-MOSQ_ERR_NO_CONN = 4
+from .base import (
+    Mosquitto,
+    to_python,
+    connack_string,
+    MQTTMessage,
+    MosquittoError,
+    ErrorCode,
+)
 
 
 class CallbackSetter:
     def __set_name__(self, owner, name):
+        if not name.startswith("on_"):
+            raise ValueError(
+                "Bad name: callback property name should start with 'on_' prefix"
+            )
         self.callback_name = f"_{name[3:]}_callback"
 
     def __get__(self, obj, objtype=None):
@@ -86,7 +95,7 @@ class MQTTClient(Mosquitto):
             try:
                 self.disconnect()
             except MosquittoError as e:
-                if e.code != MOSQ_ERR_NO_CONN:
+                if e.code != ErrorCode.NO_CONN:
                     raise e from None
             else:
                 import sys
@@ -106,9 +115,7 @@ class MQTTClient(Mosquitto):
 
     def add_topic_handler(self, topic, func):
         if self._handlers is None:
-            from .utils import TopicMatcher
-
-            self._handlers = TopicMatcher()
+            self._handlers = self._handlers_factory()
         self._handlers[topic] = func
 
     def remove_topic_handler(self, topic):
@@ -120,6 +127,12 @@ class MQTTClient(Mosquitto):
             return func
 
         return decorator
+
+    @staticmethod
+    def _handlers_factory():
+        from .utils import TopicMatcher
+
+        return TopicMatcher(threading.Lock())
 
     # -----------
     # CALLBACKS
