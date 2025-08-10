@@ -4,15 +4,14 @@ from . import config as c
 
 
 def on_connect(client, userdata, flags, rc, props):
-    print("CONNECTED", rc)
     client.subscribe(c.TOPIC, qos=c.QOS)
 
 
 def on_message(client, userdata, msg):
     global count
     count += 1
-    print("MSG", msg)
     if count == c.LIMIT:
+        print("DONE")
         client.disconnect()
 
 

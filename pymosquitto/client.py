@@ -61,14 +61,14 @@ class MQTTClient(Mosquitto):
     def is_connected(self):
         return self._is_connected
 
-    def _call(self, lib_func, *args):
+    def _call(self, func, *args):
         if self._logger:
             self._logger.debug(
                 "C call: %s%s",
-                lib_func.__name__,
+                func.__name__,
                 (self._mosq,) + args,
             )
-        super()._call(lib_func, *args)
+        super()._call(func, *args)
 
     def _set_lib_callbacks(self):
         self.connect_callback_set(self._on_connect)
@@ -91,7 +91,7 @@ class MQTTClient(Mosquitto):
     def loop_forever(self, timeout=-1, max_packets=1):
         import signal
 
-        def stop(*_):
+        def _stop(*_):
             try:
                 self.disconnect()
             except MosquittoError as e:
@@ -103,7 +103,7 @@ class MQTTClient(Mosquitto):
                 sys.exit(0)
 
         for sig in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(sig, stop)
+            signal.signal(sig, _stop)
 
         super().loop_forever()
 

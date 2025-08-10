@@ -13,7 +13,10 @@ def on_connect(client, userdata, flags, rc, props):
 def on_publish(client, userdata, mid, rc, props):
     global count
     count += 1
+    # if count % 100 == 0:
+    #     print(count)
     if count == c.LIMIT:
+        print("DONE")
         client.disconnect()
 
 

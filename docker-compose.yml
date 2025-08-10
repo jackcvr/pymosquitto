@@ -5,6 +5,8 @@ x-template: &base
   working_dir: /app
   init: true
   network_mode: service:broker
+  environment:
+    PUB_INTERVAL: 5
 
 services:
   broker:
@@ -19,15 +21,9 @@ services:
     <<: *base
     command: python3 -m benchmarks.pymosq_sub
 
-  pymosq_sub_base:
-    <<: *base
-    command: python3 -m benchmarks.pymosq_sub_base
-
   pymosq_pub:
     <<: *base
     command: python3 -m benchmarks.pymosq_pub
-    environment:
-      PUB_INTERVAL: 5
 
   paho_sub:
     <<: *base

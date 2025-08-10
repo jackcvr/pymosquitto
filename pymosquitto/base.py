@@ -5,8 +5,10 @@ import weakref
 import typing as t
 import enum
 
+from .cutils import call
+
 from .bindings import (
-    lib,
+    libmosq,
     CONNECT_CALLBACK,
     DISCONNECT_CALLBACK,
     SUBSCRIBE_CALLBACK,
@@ -141,39 +143,23 @@ class MQTTMessage(t.NamedTuple):
 
 
 def strerror(rc):
-    return lib.mosquitto_strerror(rc).decode()
+    return libmosq.mosquitto_strerror(rc).decode()
 
 
 def connack_string(rc):
-    return lib.mosquitto_connack_string(rc).decode()
+    return libmosq.mosquitto_connack_string(rc).decode()
 
 
 def reason_string(rc):
-    return lib.mosquitto_reason_string(rc).decode()
+    return libmosq.mosquitto_reason_string(rc).decode()
 
 
 def to_python(obj):
     return C.cast(obj, C.py_object).value
 
 
-def call(func, *args, use_errno=False):
-    if use_errno:
-        C.set_errno(0)
-    rc = func(*args)
-    if use_errno or rc == ErrorCode.ERRNO:
-        errno = C.get_errno()
-        if errno != 0:
-            raise OSError(errno, os.strerror(errno))
-        return rc
-    if rc == 0:
-        return rc
-    elif isinstance(rc, int):
-        raise MosquittoError(func, rc)
-    return rc
-
-
-call(lib.mosquitto_lib_init)
-atexit.register(lib.mosquitto_lib_cleanup)
+call(libmosq.mosquitto_lib_init)
+atexit.register(libmosq.mosquitto_lib_cleanup)
 
 
 class Mosquitto:
@@ -181,10 +167,10 @@ class Mosquitto:
         if client_id:
             client_id = client_id.encode()
         self._mosq = call(
-            lib.mosquitto_new, client_id, clean_start, userdata, use_errno=True
+            libmosq.mosquitto_new, client_id, clean_start, userdata, use_errno=True
         )
         self._finalizer = weakref.finalize(
-            self, call, lib.mosquitto_destroy, self._mosq
+            self, call, libmosq.mosquitto_destroy, self._mosq
         )
         self.__connect_callback = None
         self.__disconnect_callback = None
@@ -193,53 +179,61 @@ class Mosquitto:
         self.__publish_callback = None
         self.__message_callback = None
 
-    def _call(self, func, *args):
-        call(func, self._mosq, *args)
+    def _call(self, func, *args, use_errno=False):
+        rc = call(func, self._mosq, *args, use_errno=use_errno)
+        if rc == ErrorCode.ERRNO:
+            errno = C.get_errno()
+            raise OSError(errno, os.strerror(errno))
+        if rc == 0:
+            return rc
+        elif isinstance(rc, int):
+            raise MosquittoError(func, rc)
+        return rc
 
     def destroy(self):
         if self._finalizer.alive:
             self._finalizer()
 
     def connect(self, host, port=1883, keepalive=60):
-        self._call(lib.mosquitto_connect, host.encode(), port, keepalive)
+        self._call(libmosq.mosquitto_connect, host.encode(), port, keepalive)
 
     def connect_async(self, host, port=1883, keepalive=60):
-        self._call(lib.mosquitto_connect_async, host.encode(), port, keepalive)
+        self._call(libmosq.mosquitto_connect_async, host.encode(), port, keepalive)
 
     def reconnect_async(self):
-        self._call(lib.mosquitto_reconnect_async)
+        self._call(libmosq.mosquitto_reconnect_async)
 
     def reconnect_delay_set(
         self, reconnect_delay, reconnect_delay_max, reconnect_exponential_backoff=False
     ):
         self._call(
-            lib.mosquitto_reconnect_delay_set,
+            libmosq.mosquitto_reconnect_delay_set,
             reconnect_delay,
             reconnect_delay_max,
             reconnect_exponential_backoff,
         )
 
     def disconnect(self):
-        self._call(lib.mosquitto_disconnect)
+        self._call(libmosq.mosquitto_disconnect)
 
     def loop_start(self):
-        self._call(lib.mosquitto_loop_start)
+        self._call(libmosq.mosquitto_loop_start)
 
     def loop_stop(self, force=False):
-        self._call(lib.mosquitto_loop_stop, force)
+        self._call(libmosq.mosquitto_loop_stop, force)
 
     def loop_forever(self, timeout=-1, max_packets=1):
-        self._call(lib.mosquitto_loop_forever, timeout, max_packets)
+        self._call(libmosq.mosquitto_loop_forever, timeout, max_packets)
 
     def subscribe(self, topic, qos=0):
         c_mid = C.c_int(0)
-        self._call(lib.mosquitto_subscribe, C.byref(c_mid), topic.encode(), qos)
+        self._call(libmosq.mosquitto_subscribe, C.byref(c_mid), topic.encode(), qos)
         return c_mid.value
 
     def publish(self, topic, payload, qos=0, retain=False):
         c_mid = C.c_int(0)
         self._call(
-            lib.mosquitto_publish,
+            libmosq.mosquitto_publish,
             C.byref(c_mid),
             topic.encode(),
             len(payload),
@@ -251,24 +245,28 @@ class Mosquitto:
 
     def connect_callback_set(self, callback):
         self.__connect_callback = CONNECT_CALLBACK(callback)
-        self._call(lib.mosquitto_connect_callback_set, self.__connect_callback)
+        self._call(libmosq.mosquitto_connect_callback_set, self.__connect_callback)
 
     def disconnect_callback_set(self, callback):
         self.__disconnect_callback = DISCONNECT_CALLBACK(callback)
-        self._call(lib.mosquitto_disconnect_callback_set, self.__disconnect_callback)
+        self._call(
+            libmosq.mosquitto_disconnect_callback_set, self.__disconnect_callback
+        )
 
     def subscribe_callback_set(self, callback):
         self.__subscribe_callback = SUBSCRIBE_CALLBACK(callback)
-        self._call(lib.mosquitto_subscribe_callback_set, self.__subscribe_callback)
+        self._call(libmosq.mosquitto_subscribe_callback_set, self.__subscribe_callback)
 
     def unsubscribe_callback_set(self, callback):
         self.__unsubscribe_callback = UNSUBSCRIBE_CALLBACK(callback)
-        self._call(lib.mosquitto_unsubscribe_callback_set, self.__unsubscribe_callback)
+        self._call(
+            libmosq.mosquitto_unsubscribe_callback_set, self.__unsubscribe_callback
+        )
 
     def publish_callback_set(self, callback):
         self.__publish_callback = PUBLISH_CALLBACK(callback)
-        self._call(lib.mosquitto_publish_callback_set, self.__publish_callback)
+        self._call(libmosq.mosquitto_publish_callback_set, self.__publish_callback)
 
     def message_callback_set(self, callback):
         self.__message_callback = MESSAGE_CALLBACK(callback)
-        self._call(lib.mosquitto_message_callback_set, self.__message_callback)
+        self._call(libmosq.mosquitto_message_callback_set, self.__message_callback)

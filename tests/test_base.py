@@ -10,10 +10,6 @@ def _offload(func, *args, **kwargs):
     return t
 
 
-def test_call():
-    pass
-
-
 def test_strerror():
     msg = base.strerror(base.ErrorCode.NOMEM)
     assert msg == "Out of memory."

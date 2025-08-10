@@ -5,9 +5,12 @@ x-template: &base
   working_dir: /app
   init: true
   network_mode: service:broker
+  depends_on:
+    - broker
   environment:
-#    MQTT_LIMIT: 1000
-    MQTT_QOS: 0
+    MQTT_LIMIT: ${MQTT_LIMIT}
+    PUB_INTERVAL: ${PUB_INTERVAL}
+    MQTT_QOS: ${MQTT_QOS}
 
 services:
   broker:
@@ -17,12 +20,10 @@ services:
 
   sub:
     <<: *base
-    depends_on:
-      - broker
-    command: /usr/bin/time -v python3 -m benchmarks.${PREFIX}_sub
+    command: /usr/bin/time -v python3 -m benchmarks.${SUB}_sub
 
   pub:
     <<: *base
     depends_on:
       - sub
-    command: bash -c "/usr/bin/time -v python3 -m benchmarks.${PREFIX}_pub"
+    command: /usr/bin/time -v python3 -m benchmarks.${PUB}_pub
