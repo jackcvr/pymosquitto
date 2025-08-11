@@ -5,9 +5,17 @@ from pymosquitto.client import MQTTClient
 
 def test_subscribe_lazy():
     client = MQTTClient()
-    client.subscribe_lazy("test1")
-    client.subscribe_lazy("test2")
-    assert client._topics == {"test1": 0, "test2": 0}
+    client.subscribe("test1")
+    client.subscribe("test2", 2)
+    assert client._topics == {"test1": 0, "test2": 2}
+
+
+def test_unsubscribe():
+    client = MQTTClient()
+    client.subscribe("test1")
+    assert client._topics == {"test1": 0}
+    client.unsubscribe("test1")
+    assert client._topics == {}
 
 
 @pytest.mark.parametrize(

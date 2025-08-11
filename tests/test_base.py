@@ -1,13 +1,5 @@
-import threading
-
 import pytest
 from pymosquitto import base
-
-
-def _offload(func, *args, **kwargs):
-    t = threading.Thread(target=func, args=args, kwargs=kwargs)
-    t.start()
-    return t
 
 
 def test_strerror():

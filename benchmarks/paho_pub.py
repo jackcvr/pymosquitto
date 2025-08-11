@@ -1,28 +1,34 @@
+import time
+
 import paho.mqtt.client as mqtt
 
 from . import config as c
 
 
-def on_connect(client, userdata, flags, rc, props):
-    if rc != 0:
-        raise RuntimeError("Connection failed")
-    for i in range(c.LIMIT):
-        client.publish(c.TOPIC, i, qos=c.QOS)
+def sleep():
+    pass
+
+
+if c.INTERVAL:
+
+    def sleep():
+        time.sleep(c.INTERVAL)
 
 
 def on_publish(client, userdata, mid, rc, props):
     global count
     count += 1
-    # if count % 100 == 0:
-    #     print(count)
     if count == c.LIMIT:
         print("DONE")
+        time.sleep(1)
         client.disconnect()
 
 
 count = 0
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-client.on_connect = on_connect
 client.on_publish = on_publish
-client.connect_async(c.HOST, c.PORT, 60)
+client.connect(c.HOST, c.PORT, 60)
+for i in range(c.LIMIT):
+    sleep()
+    client.publish(c.TOPIC, str(i), qos=c.QOS)
 client.loop_forever()

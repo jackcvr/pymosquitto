@@ -1,6 +1,3 @@
-from contextlib import nullcontext
-
-
 class TopicMatcher:
     class Node:
         __slots__ = ("children", "value")
@@ -11,7 +8,11 @@ class TopicMatcher:
 
     def __init__(self, lock=None):
         self._root = self.Node()
-        self._lock = lock or nullcontext()
+        self._lock = lock
+        if not lock:
+            from contextlib import nullcontext
+
+            self._lock = nullcontext()
 
     def __setitem__(self, key, value):
         with self._lock:

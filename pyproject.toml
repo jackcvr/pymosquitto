@@ -11,8 +11,9 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
-  "pytest",
-  "paho-mqtt",
+    "twine",
+    "pytest",
+    "paho-mqtt",
 ]
 
 [tool.black]

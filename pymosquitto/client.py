@@ -1,4 +1,5 @@
 import threading
+import ctypes as C
 
 from .base import (
     Mosquitto,
@@ -7,7 +8,9 @@ from .base import (
     MQTTMessage,
     MosquittoError,
     ErrorCode,
+    LogLevel,
 )
+from .cutils import call
 
 
 class CallbackSetter:
@@ -31,9 +34,6 @@ class CallbackSetter:
 
 
 class MQTTClient(Mosquitto):
-    DEFAULT_PORT = 1883
-    DEFAULT_KEEPALIVE = 60
-
     def __init__(self, *args, logger=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._logger = logger
@@ -49,6 +49,7 @@ class MQTTClient(Mosquitto):
         self._unsubscribe_callback = None
         self._publish_callback = None
         self._message_callback = None
+        self._log_callback = None
 
     on_connect = CallbackSetter()
     on_disconnect = CallbackSetter()
@@ -56,6 +57,7 @@ class MQTTClient(Mosquitto):
     on_unsubscribe = CallbackSetter()
     on_publish = CallbackSetter()
     on_message = CallbackSetter()
+    on_log = CallbackSetter()
 
     @property
     def is_connected(self):
@@ -77,41 +79,57 @@ class MQTTClient(Mosquitto):
         self.unsubscribe_callback_set(self._on_unsubscribe)
         self.publish_callback_set(self._on_publish)
         self.message_callback_set(self._on_message)
-
-    def connect(self, host, port=DEFAULT_PORT, keepalive=DEFAULT_KEEPALIVE):
-        super().connect(host, port, keepalive)
-
-    def connect_async(self, host, port=DEFAULT_PORT, keepalive=DEFAULT_KEEPALIVE):
-        super().connect_async(host, port, keepalive)
+        self.log_callback_set(self._on_log)
 
     def wait_until_connected(self, timeout=None):
         with self._cond:
             return self._cond.wait_for(lambda: self._is_connected, timeout=timeout)
 
-    def loop_forever(self, timeout=-1, max_packets=1):
+    def loop_forever(self, timeout=-1, *, _direct=False):
+        if _direct:
+            super().loop_forever(timeout)
+            return
+
         import signal
 
-        def _stop(*_):
+        libc = C.CDLL(None)
+
+        HANDLER_FUNC = C.CFUNCTYPE(None, C.c_int)
+        libc.signal.argtypes = [C.c_int, HANDLER_FUNC]
+        libc.signal.restype = HANDLER_FUNC
+
+        @HANDLER_FUNC
+        def _stop(signum):
+            if self._logger:
+                self._logger.debug("Caught signal: %s", signal.Signals(signum).name)
             try:
                 self.disconnect()
             except MosquittoError as e:
                 if e.code != ErrorCode.NO_CONN:
                     raise e from None
-            else:
-                import sys
 
-                sys.exit(0)
+        call(libc.signal, signal.SIGINT, _stop, use_errno=True)
+        call(libc.signal, signal.SIGTERM, _stop, use_errno=True)
+        super().loop_forever(timeout)
 
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(sig, _stop)
-
-        super().loop_forever()
-
-    def subscribe_lazy(self, topic, qos=0):
+    def subscribe(self, topic, qos=0, *, _direct=False):
+        if _direct:
+            return super().subscribe(topic, qos)
         with self._cond:
             self._topics[topic] = qos
             if self._is_connected:
-                self.subscribe(topic, qos)
+                return super().subscribe(topic, qos)
+            return None
+
+    def unsubscribe(self, topic, *, _direct=False):
+        if _direct:
+            return super().unsubscribe(topic)
+        with self._cond:
+            if topic in self._topics:
+                del self._topics[topic]
+            if self._is_connected:
+                return super().unsubscribe(topic)
+            return None
 
     def add_topic_handler(self, topic, func):
         if self._handlers is None:
@@ -201,3 +219,7 @@ class MQTTClient(Mosquitto):
                     handler(self, userdata, msg)
                 except Exception as e:
                     self._logger.exception(e)
+
+    def _on_log(self, mosq, userdata, level, msg):
+        if self._log_callback:
+            self._log_callback(self, to_python(userdata), LogLevel(level), msg.decode())

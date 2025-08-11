@@ -1,3 +1,5 @@
+import time
+
 from pymosquitto.client import MQTTClient
 
 from . import config as c
@@ -11,7 +13,6 @@ def sleep():
 
 if c.INTERVAL:
     import logging
-    import time
 
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger()
@@ -25,8 +26,6 @@ def on_publish(client, userdata, mid):
     count += 1
     if count == c.LIMIT:
         print("DONE")
-        import time
-
         time.sleep(1)
         client.disconnect()
 

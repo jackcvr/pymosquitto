@@ -15,6 +15,7 @@ from .bindings import (
     UNSUBSCRIBE_CALLBACK,
     MESSAGE_CALLBACK,
     PUBLISH_CALLBACK,
+    LOG_CALLBACK,
 )
 
 
@@ -114,6 +115,20 @@ class ReasonCode(enum.IntEnum):
     WILDCARD_SUBS_NOT_SUPPORTED = 162
 
 
+class LogLevel(enum.IntEnum):
+    NONE = 0
+    INFO = 1 << 0
+    NOTICE = 1 << 1
+    WARNING = 1 << 2
+    ERR = 1 << 3
+    DEBUG = 1 << 4
+    SUBSCRIBE = 1 << 5
+    UNSUBSCRIBE = 1 << 6
+    WEBSOCKETS = 1 << 7
+    INTERNAL = 0x80000000
+    ALL = 0xFFFFFFFF
+
+
 class MosquittoError(Exception):
     def __init__(self, func, code):
         self.func_name = func.__name__
@@ -178,6 +193,7 @@ class Mosquitto:
         self.__unsubscribe_callback = None
         self.__publish_callback = None
         self.__message_callback = None
+        self.__log_callback = None
 
     def _call(self, func, *args, use_errno=False):
         rc = call(func, self._mosq, *args, use_errno=use_errno)
@@ -222,12 +238,17 @@ class Mosquitto:
     def loop_stop(self, force=False):
         self._call(libmosq.mosquitto_loop_stop, force)
 
-    def loop_forever(self, timeout=-1, max_packets=1):
-        self._call(libmosq.mosquitto_loop_forever, timeout, max_packets)
+    def loop_forever(self, timeout=-1):
+        self._call(libmosq.mosquitto_loop_forever, timeout, 1)
 
     def subscribe(self, topic, qos=0):
         c_mid = C.c_int(0)
         self._call(libmosq.mosquitto_subscribe, C.byref(c_mid), topic.encode(), qos)
+        return c_mid.value
+
+    def unsubscribe(self, topic):
+        c_mid = C.c_int(0)
+        self._call(libmosq.mosquitto_unsubscribe, C.byref(c_mid), topic.encode())
         return c_mid.value
 
     def publish(self, topic, payload, qos=0, retain=False):
@@ -270,3 +291,7 @@ class Mosquitto:
     def message_callback_set(self, callback):
         self.__message_callback = MESSAGE_CALLBACK(callback)
         self._call(libmosq.mosquitto_message_callback_set, self.__message_callback)
+
+    def log_callback_set(self, callback):
+        self.__log_callback = LOG_CALLBACK(callback)
+        self._call(libmosq.mosquitto_log_callback_set, self.__log_callback)

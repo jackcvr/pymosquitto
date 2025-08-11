@@ -6,17 +6,21 @@ Lightweight Python MQTT client wrapping libmosquitto C library via ctypes.
 
 TODO:
 
-- add on log callback
+- rewrite TopicMatcher on C
 - add more benchmarks and graphs
+- create documentation
+
 
 ## Dependencies
 
 - python3.8+
 - libmosquitto1
 
+
 ## Installation
 
 - TODO
+
 
 ## Usage
 
@@ -31,47 +35,46 @@ def on_message(client, userdata, msg):
 count = 0
 client = MQTTClient()
 client.on_message = on_message
-client.subscribe_lazy("#", 1)
+client.subscribe("#", 1)
 client.connect_async("localhost", 1883)
 client.loop_forever()
 ```
 
-See more in the `benchmarks/` directory.
 
 ## Benchmarks
 
-Publishing and receiving 1 mil messages with QoS 0.
+Publishing and receiving 1 million messages with QoS 0.
 
-PyMosquitto | PUB
-
-```bash
-Elapsed (wall clock) time (h:mm:ss or m:ss):0:04.13
-Maximum resident set size (kbytes): 169816
-```
-
-PyMosquitto | SUB
-```bash
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.31
-Maximum resident set size (kbytes): 13464
-```
-
-Paho-MQTT | PUB
-```bash
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:23.50
-Maximum resident set size (kbytes): 2145204
-```
-
-Paho-MQTT | SUB
+**PyMosquitto | PUB**
 
 ```bash
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:24.87
-Maximum resident set size (kbytes): 19560
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.71
+Maximum resident set size (kbytes): 13688
 ```
 
-As a result pymosquitto:
+**PyMosquitto | SUB**
+```bash
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.82
+Maximum resident set size (kbytes): 13704
+```
 
-- uses ~6MB less memory than PahoMQTT on IDLE
-- ~6x times faster
+**Paho-MQTT | PUB**
+```bash
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:24.59
+Maximum resident set size (kbytes): 19756
+```
+
+**Paho-MQTT | SUB**
+
+```bash
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:11.19
+Maximum resident set size (kbytes): 19804
+```
+
+**Conclusions**:
+
+- **Memory** usage: PyMosquitto uses ~6 MB less than PahoMQTT.
+- **CPU**: PyMosquitto is ~5x faster for publishing and ~2x faster for receiving.
 
 
 ## License

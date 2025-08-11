@@ -46,6 +46,7 @@ SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
 UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
 PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
 MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(CMessage))
+LOG_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int, C.c_char_p)
 
 # const char *mosquitto_strerror(int mosq_errno)
 libmosq.mosquitto_strerror.argtypes = (C.c_int,)
@@ -109,6 +110,10 @@ libmosq.mosquitto_subscribe.argtypes = (
 )
 libmosq.mosquitto_subscribe.restype = C.c_int
 
+# int mosquitto_unsubscribe(struct mosquitto *mosq, int *mid, const char *sub)
+libmosq.mosquitto_unsubscribe.argtypes = (C.c_void_p, C.POINTER(C.c_int), C.c_char_p)
+libmosq.mosquitto_unsubscribe.restype = C.c_int
+
 # int mosquitto_loop_start(struct mosquitto *mosq)
 libmosq.mosquitto_loop_start.argtypes = (C.c_void_p,)
 libmosq.mosquitto_loop_start.restype = C.c_int
@@ -156,3 +161,6 @@ libmosq.mosquitto_publish_callback_set.restype = None
 # void mosquitto_message_callback_set(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, const struct mosquitto_message *))
 libmosq.mosquitto_message_callback_set.argtypes = (C.c_void_p, MESSAGE_CALLBACK)
 libmosq.mosquitto_message_callback_set.restype = None
+
+# void mosquitto_log_callback_set(struct mosquitto *mosq, void (*on_log)(struct mosquitto *, void *, int, const char *))
+libmosq.mosquitto_log_callback_set.argtypes = (C.c_void_p, LOG_CALLBACK)

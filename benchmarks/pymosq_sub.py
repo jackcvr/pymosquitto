@@ -22,6 +22,6 @@ def on_message(client, userdata, msg):
 count = 0
 client = MQTTClient(logger=logger)
 client.on_message = on_message
-client.subscribe_lazy(c.TOPIC, c.QOS)
+client.subscribe(c.TOPIC, c.QOS)
 client.connect_async(c.HOST, c.PORT)
 client.loop_forever()
