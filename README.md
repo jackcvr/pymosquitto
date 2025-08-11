@@ -43,38 +43,27 @@ client.loop_forever()
 
 ## Benchmarks
 
-Publishing and receiving 1 million messages with QoS 0.
+Receiving 1 million messages with QoS 0.
 
-**PyMosquitto | PUB**
-
-```bash
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.71
-Maximum resident set size (kbytes): 13688
-```
-
-**PyMosquitto | SUB**
+**PyMosquitto**
 ```bash
 Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.82
 Maximum resident set size (kbytes): 13704
 ```
 
-**Paho-MQTT | PUB**
-```bash
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:24.59
-Maximum resident set size (kbytes): 19756
-```
-
-**Paho-MQTT | SUB**
+**Paho-MQTT**
 
 ```bash
 Elapsed (wall clock) time (h:mm:ss or m:ss): 0:11.19
 Maximum resident set size (kbytes): 19804
 ```
 
-**Conclusions**:
+**aMQTT**
+```bash
+Elapsed (wall clock) time (h:mm:ss or m:ss): 1:02.55
+Maximum resident set size (kbytes): 28200
 
-- **Memory** usage: PyMosquitto uses ~6 MB less than PahoMQTT.
-- **CPU**: PyMosquitto is ~5x faster for publishing and ~2x faster for receiving.
+```
 
 
 ## License

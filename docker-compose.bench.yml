@@ -8,9 +8,9 @@ x-template: &base
   depends_on:
     - broker
   environment:
+    MQTT_QOS: ${MQTT_QOS}
     MQTT_LIMIT: ${MQTT_LIMIT}
     PUB_INTERVAL: ${PUB_INTERVAL}
-    MQTT_QOS: ${MQTT_QOS}
 
 services:
   broker:
@@ -20,10 +20,13 @@ services:
 
   sub:
     <<: *base
-    command: /usr/bin/time -v python3 -m benchmarks.${SUB}_sub
+    command: /usr/bin/time -v python3 -m benchmarks.${PREFIX}_sub
 
   pub:
-    <<: *base
+    image: eclipse-mosquitto:latest
+    network_mode: service:broker
+    init: true
     depends_on:
+      - broker
       - sub
-    command: /usr/bin/time -v python3 -m benchmarks.${PUB}_pub
+    command: sh -c "sleep 1 && mosquitto_pub -t "benchmark" -n --repeat ${MQTT_LIMIT} --repeat-delay ${PUB_INTERVAL} --nodelay"

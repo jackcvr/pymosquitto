@@ -14,6 +14,7 @@ dev = [
     "twine",
     "pytest",
     "paho-mqtt",
+    "amqtt",
 ]
 
 [tool.black]

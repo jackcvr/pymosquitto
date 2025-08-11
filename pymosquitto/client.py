@@ -93,7 +93,6 @@ class MQTTClient(Mosquitto):
         import signal
 
         libc = C.CDLL(None)
-
         HANDLER_FUNC = C.CFUNCTYPE(None, C.c_int)
         libc.signal.argtypes = [C.c_int, HANDLER_FUNC]
         libc.signal.restype = HANDLER_FUNC
@@ -108,8 +107,8 @@ class MQTTClient(Mosquitto):
                 if e.code != ErrorCode.NO_CONN:
                     raise e from None
 
-        call(libc.signal, signal.SIGINT, _stop, use_errno=True)
-        call(libc.signal, signal.SIGTERM, _stop, use_errno=True)
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            call(libc.signal, sig, _stop, use_errno=True)
         super().loop_forever(timeout)
 
     def subscribe(self, topic, qos=0, *, _direct=False):
