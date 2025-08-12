@@ -2,7 +2,6 @@ import ctypes as C
 
 from .cutils import load_library
 
-
 libmosq = load_library("mosquitto")
 if libmosq is None:
     raise ImportError("libmosquitto not found. Please install libmosquitto1")

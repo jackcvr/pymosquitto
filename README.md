@@ -1,13 +1,12 @@
 # PyMosquitto
 
-Lightweight Python MQTT client wrapping libmosquitto C library via ctypes.
+Lightweight Python MQTT client implemented as a simple wrapper over libmosquitto via ctypes.
 
 **Development in progress**:
 
 TODO:
 
-- rewrite TopicMatcher on C
-- add more benchmarks and graphs
+- rewrite TopicMatcher on C or Cython
 - create documentation
 
 
@@ -44,6 +43,10 @@ client.loop_forever()
 ## Benchmarks
 
 Receiving 1 million messages with QoS 0.
+
+*The Python interpreter overhead(8.632 MB) has been excluded from the memory plot.
+
+![benchmark-results](./results.png)
 
 **PyMosquitto**
 ```bash

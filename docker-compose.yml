@@ -1,12 +1,16 @@
 x-template: &base
   build: .
   volumes:
-    - .:/app
+    - ./benchmarks:/app/benchmarks
   working_dir: /app
   init: true
   network_mode: service:broker
+  depends_on:
+    - broker
   environment:
-    PUB_INTERVAL: 5
+    MQTT_QOS: ${MQTT_QOS}
+    MQTT_LIMIT: ${MQTT_LIMIT:-1000}
+    PUB_INTERVAL: ${PUB_INTERVAL:-5}
 
 services:
   broker:
@@ -14,17 +18,18 @@ services:
 
   py:
     <<: *base
-    network_mode: bridge
-    command: python3 -c "import signal; signal.pause()"
+    network_mode: none
+    command: /usr/bin/time -v python3 -c ""
 
-  pymosq_sub:
+  sub:
     <<: *base
-    command: python3 -m benchmarks.pymosq_sub
+    command: /usr/bin/time -v python3 -m benchmarks.${PREFIX:-pymosq}_sub
 
-  pymosq_pub:
-    <<: *base
-    command: python3 -m benchmarks.pymosq_pub
-
-  paho_sub:
-    <<: *base
-    command: python3 -m benchmarks.paho_sub
+  pub:
+    image: eclipse-mosquitto:latest
+    network_mode: service:broker
+    init: true
+    depends_on:
+      - broker
+      - sub
+    command: sh -c "sleep 1 && mosquitto_pub -t "benchmark" -n --repeat 3000000 --repeat-delay ${PUB_INTERVAL:-5} --nodelay"

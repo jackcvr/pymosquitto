@@ -181,11 +181,11 @@ class Mosquitto:
     def __init__(self, client_id=None, clean_start=True, userdata=None):
         if client_id:
             client_id = client_id.encode()
-        self._mosq = call(
+        self._c_mosq_p = call(
             libmosq.mosquitto_new, client_id, clean_start, userdata, use_errno=True
         )
         self._finalizer = weakref.finalize(
-            self, call, libmosq.mosquitto_destroy, self._mosq
+            self, call, libmosq.mosquitto_destroy, self._c_mosq_p
         )
         self.__connect_callback = None
         self.__disconnect_callback = None
@@ -196,7 +196,7 @@ class Mosquitto:
         self.__log_callback = None
 
     def _call(self, func, *args, use_errno=False):
-        rc = call(func, self._mosq, *args, use_errno=use_errno)
+        rc = call(func, self._c_mosq_p, *args, use_errno=use_errno)
         if rc == ErrorCode.ERRNO:
             errno = C.get_errno()
             raise OSError(errno, os.strerror(errno))

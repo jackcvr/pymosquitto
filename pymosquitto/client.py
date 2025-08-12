@@ -68,7 +68,7 @@ class MQTTClient(Mosquitto):
             self._logger.debug(
                 "C call: %s%s",
                 func.__name__,
-                (self._mosq,) + args,
+                (self._c_mosq_p,) + args,
             )
         super()._call(func, *args)
 

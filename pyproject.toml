@@ -7,12 +7,12 @@ name = "pymosquitto"
 version = "0.1.0"
 description = "Lightweight Python MQTT client wrapping libmosquitto C library via ctypes"
 requires-python = ">=3.8"
-dependencies = []
 
 [project.optional-dependencies]
 dev = [
     "twine",
     "pytest",
+    "matplotlib",
     "paho-mqtt",
     "amqtt",
 ]
