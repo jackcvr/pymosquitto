@@ -30,8 +30,8 @@ class TopicMatcher:
                 if node.value is None:
                     raise KeyError(key)
                 return node.value
-            except KeyError as ke:
-                raise KeyError(key) from ke
+            except KeyError as e:
+                raise KeyError(key) from e
 
     def __delitem__(self, key):
         with self._lock:

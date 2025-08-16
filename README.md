@@ -1,13 +1,6 @@
 # PyMosquitto
 
-Lightweight Python MQTT client implemented as a simple wrapper over libmosquitto via ctypes.
-
-**Development in progress**:
-
-TODO:
-
-- rewrite TopicMatcher on C or Cython
-- create documentation
+Lightweight Python MQTT client implemented as a simple wrapper over libmosquitto.
 
 
 ## Dependencies
@@ -31,7 +24,6 @@ def on_message(client, userdata, msg):
     print(msg)
 
 
-count = 0
 client = MQTTClient()
 client.on_message = on_message
 client.subscribe("#", 1)

@@ -60,6 +60,10 @@ class MQTTClient(Mosquitto):
     on_log = CallbackSetter()
 
     @property
+    def topics(self):
+        return self._topics
+
+    @property
     def is_connected(self):
         return self._is_connected
 
@@ -107,8 +111,9 @@ class MQTTClient(Mosquitto):
                 if e.code != ErrorCode.NO_CONN:
                     raise e from None
 
-        for sig in (signal.SIGTERM, signal.SIGINT):
+        for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
             call(libc.signal, sig, _stop, use_errno=True)
+
         super().loop_forever(timeout)
 
     def subscribe(self, topic, qos=0, *, _direct=False):

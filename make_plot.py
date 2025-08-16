@@ -16,11 +16,11 @@ MEMORY = {
 plt.figure(figsize=(6, 3))
 
 plt.subplot(121)
-plt.title("Time")
+plt.title("Time/sec")
 plt.bar(TIME.keys(), TIME.values())
 
 plt.subplot(122)
-plt.title("Memory")
+plt.title("Memory/MB")
 plt.bar(MEMORY.keys(), MEMORY.values())
 
 plt.tight_layout()
