@@ -41,6 +41,7 @@ Receiving 1 million messages with QoS 0.
 ![benchmark-results](./results.png)
 
 **PyMosquitto**
+
 ```text
 Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.82
 Maximum resident set size (kbytes): 13704

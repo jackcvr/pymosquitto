@@ -152,9 +152,9 @@ class MQTTClient(Mosquitto):
 
     @staticmethod
     def _handlers_factory():
-        from .utils import TopicMatcher
+        from .utils import SafeTopicMatcher
 
-        return TopicMatcher(threading.Lock())
+        return SafeTopicMatcher(threading.Lock())
 
     # -----------
     # CALLBACKS

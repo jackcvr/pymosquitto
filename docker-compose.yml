@@ -36,4 +36,4 @@ services:
     depends_on:
       - broker
       - sub
-    command: sh -c "sleep 1 && mosquitto_pub -t "benchmark" -n --repeat 3000000 --repeat-delay ${PUB_INTERVAL:-5} --nodelay"
+    command: sh -c "sleep 1 && mosquitto_pub -t "benchmark" -n --repeat ${PUB_AMOUNT:-3000000} -q 0 --repeat-delay ${PUB_INTERVAL:-5} --nodelay"

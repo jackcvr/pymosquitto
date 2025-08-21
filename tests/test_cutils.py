@@ -19,6 +19,7 @@ def test_call_error():
 
 
 def test_call_errno():
+    ptr = C.cast(C.pointer(C.c_int()), C.c_void_p)
     with pytest.raises(OSError) as e:
-        call(libc.read, C.c_void_p(), use_errno=True)
-    assert e.value.errno == errno.EFAULT
+        call(libc.read, ptr, use_errno=True)
+    assert e.value.errno == errno.EBADF
