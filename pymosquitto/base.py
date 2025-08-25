@@ -1,10 +1,9 @@
 import ctypes as C
 import atexit
-import os
 import weakref
 import typing as t
 
-from .cutils import call
+from .cutils import call, os_error
 
 from .bindings import (
     libmosq,
@@ -75,7 +74,7 @@ class Mosquitto:
             libmosq.mosquitto_new, client_id, clean_start, userdata
         )
         if err != 0:
-            raise OSError(err, os.strerror(err))
+            raise os_error(err)
         self._finalizer = weakref.finalize(
             self, libmosq.mosquitto_destroy, self._c_mosq_p
         )
@@ -89,29 +88,37 @@ class Mosquitto:
 
     def _call(self, func, *args, use_errno=False):
         if use_errno:
-            C.set_errno(0)
-        rc = func(self._c_mosq_p, *args)
-        if rc == ErrorCode.ERRNO:
-            errno = C.get_errno()
-            raise OSError(errno, os.strerror(errno))
-        if rc == 0:
-            return rc
-        elif isinstance(rc, int):
-            raise MosquittoError(func, rc)
-        return rc
+            ret, err = call(func, self._c_mosq_p, *args)
+            if ret == ErrorCode.ERRNO:
+                raise os_error(err)
+        else:
+            ret = func(self._c_mosq_p, *args)
+        if ret == 0:
+            return ret
+        elif isinstance(ret, int):
+            raise MosquittoError(func, ret)
+        return ret
 
     def destroy(self):
         if self._finalizer.alive:
             self._finalizer()
 
     def connect(self, host, port=1883, keepalive=60):
-        self._call(libmosq.mosquitto_connect, host.encode(), port, keepalive)
+        self._call(
+            libmosq.mosquitto_connect, host.encode(), port, keepalive, use_errno=True
+        )
 
     def connect_async(self, host, port=1883, keepalive=60):
-        self._call(libmosq.mosquitto_connect_async, host.encode(), port, keepalive)
+        self._call(
+            libmosq.mosquitto_connect_async,
+            host.encode(),
+            port,
+            keepalive,
+            use_errno=True,
+        )
 
     def reconnect_async(self):
-        self._call(libmosq.mosquitto_reconnect_async)
+        self._call(libmosq.mosquitto_reconnect_async, use_errno=True)
 
     def reconnect_delay_set(
         self, reconnect_delay, reconnect_delay_max, reconnect_exponential_backoff=False
