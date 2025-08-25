@@ -1,5 +1,6 @@
 import threading
 import ctypes as C
+import os
 
 from .base import (
     Mosquitto,
@@ -8,9 +9,9 @@ from .base import (
     MQTTMessage,
     MosquittoError,
     ErrorCode,
-    LogLevel,
 )
 from .cutils import call
+from .constants import LogLevel
 
 
 class CallbackSetter:
@@ -67,14 +68,14 @@ class MQTTClient(Mosquitto):
     def is_connected(self):
         return self._is_connected
 
-    def _call(self, func, *args):
+    def _call(self, func, *args, use_errno=False):
         if self._logger:
             self._logger.debug(
                 "C call: %s%s",
                 func.__name__,
                 (self._c_mosq_p,) + args,
             )
-        super()._call(func, *args)
+        super()._call(func, *args, use_errno=use_errno)
 
     def _set_lib_callbacks(self):
         self.connect_callback_set(self._on_connect)
@@ -112,7 +113,9 @@ class MQTTClient(Mosquitto):
                     raise e from None
 
         for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
-            call(libc.signal, sig, _stop, use_errno=True)
+            _, err = call(libc.signal, sig, _stop)
+            if err != 0:
+                raise OSError(err, os.strerror(err))
 
         super().loop_forever(timeout)
 

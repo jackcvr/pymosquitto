@@ -1,19 +1,21 @@
 import pytest
+
 from pymosquitto import base
+from pymosquitto.constants import ErrorCode, ConnackCode, ReasonCode
 
 
 def test_strerror():
-    msg = base.strerror(base.ErrorCode.NOMEM)
+    msg = base.strerror(ErrorCode.NOMEM)
     assert msg == "Out of memory."
 
 
 def test_connack_string():
-    msg = base.connack_string(base.ConnackCode.REFUSED_NOT_AUTHORIZED)
+    msg = base.connack_string(ConnackCode.REFUSED_NOT_AUTHORIZED)
     assert msg == "Connection Refused: not authorised."
 
 
 def test_reason_string():
-    msg = base.reason_string(base.ReasonCode.BANNED)
+    msg = base.reason_string(ReasonCode.BANNED)
     assert msg == "Banned"
 
 

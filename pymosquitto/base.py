@@ -3,7 +3,6 @@ import atexit
 import os
 import weakref
 import typing as t
-import enum
 
 from .cutils import call
 
@@ -17,116 +16,7 @@ from .bindings import (
     PUBLISH_CALLBACK,
     LOG_CALLBACK,
 )
-
-
-class ErrorCode(enum.IntEnum):
-    AUTH_CONTINUE = -4
-    NO_SUBSCRIBERS = -3
-    SUB_EXISTS = -2
-    CONN_PENDING = -1
-    SUCCESS = 0
-    NOMEM = 1
-    PROTOCOL = 2
-    INVAL = 3
-    NO_CONN = 4
-    CONN_REFUSED = 5
-    NOT_FOUND = 6
-    CONN_LOST = 7
-    TLS = 8
-    PAYLOAD_SIZE = 9
-    NOT_SUPPORTED = 10
-    AUTH = 11
-    ACL_DENIED = 12
-    UNKNOWN = 13
-    ERRNO = 14
-    EAI = 15
-    PROXY = 16
-    PLUGIN_DEFER = 17
-    MALFORMED_UTF8 = 18
-    KEEPALIVE = 19
-    LOOKUP = 20
-    MALFORMED_PACKET = 21
-    DUPLICATE_PROPERTY = 22
-    TLS_HANDSHAKE = 23
-    QOS_NOT_SUPPORTED = 24
-    OVERSIZE_PACKET = 25
-    OCSP = 26
-    TIMEOUT = 27
-    RETAIN_NOT_SUPPORTED = 28
-    TOPIC_ALIAS_INVALID = 29
-    ADMINISTRATIVE_ACTION = 30
-    ALREADY_EXISTS = 31
-
-
-class ConnackCode(enum.IntEnum):
-    ACCEPTED = 0
-    REFUSED_PROTOCOL_VERSION = 1
-    REFUSED_IDENTIFIER_REJECTED = 2
-    REFUSED_SERVER_UNAVAILABLE = 3
-    REFUSED_BAD_USERNAME_PASSWORD = 4
-    REFUSED_NOT_AUTHORIZED = 5
-
-
-class ReasonCode(enum.IntEnum):
-    SUCCESS = 0
-    NORMAL_DISCONNECTION = 0
-    GRANTED_QOS0 = 0
-    GRANTED_QOS1 = 1
-    GRANTED_QOS2 = 2
-    DISCONNECT_WITH_WILL_MSG = 4
-    NO_MATCHING_SUBSCRIBERS = 16
-    NO_SUBSCRIPTION_EXISTED = 17
-    CONTINUE_AUTHENTICATION = 24
-    REAUTHENTICATE = 25
-    UNSPECIFIED = 128
-    MALFORMED_PACKET = 129
-    PROTOCOL_ERROR = 130
-    IMPLEMENTATION_SPECIFIC = 131
-    UNSUPPORTED_PROTOCOL_VERSION = 132
-    CLIENTID_NOT_VALID = 133
-    BAD_USERNAME_OR_PASSWORD = 134
-    NOT_AUTHORIZED = 135
-    SERVER_UNAVAILABLE = 136
-    SERVER_BUSY = 137
-    BANNED = 138
-    SERVER_SHUTTING_DOWN = 139
-    BAD_AUTHENTICATION_METHOD = 140
-    KEEP_ALIVE_TIMEOUT = 141
-    SESSION_TAKEN_OVER = 142
-    TOPIC_FILTER_INVALID = 143
-    TOPIC_NAME_INVALID = 144
-    PACKET_ID_IN_USE = 145
-    PACKET_ID_NOT_FOUND = 146
-    RECEIVE_MAXIMUM_EXCEEDED = 147
-    TOPIC_ALIAS_INVALID = 148
-    PACKET_TOO_LARGE = 149
-    MESSAGE_RATE_TOO_HIGH = 150
-    QUOTA_EXCEEDED = 151
-    ADMINISTRATIVE_ACTION = 152
-    PAYLOAD_FORMAT_INVALID = 153
-    RETAIN_NOT_SUPPORTED = 154
-    QOS_NOT_SUPPORTED = 155
-    USE_ANOTHER_SERVER = 156
-    SERVER_MOVED = 157
-    SHARED_SUBS_NOT_SUPPORTED = 158
-    CONNECTION_RATE_EXCEEDED = 159
-    MAXIMUM_CONNECT_TIME = 160
-    SUBSCRIPTION_IDS_NOT_SUPPORTED = 161
-    WILDCARD_SUBS_NOT_SUPPORTED = 162
-
-
-class LogLevel(enum.IntEnum):
-    NONE = 0
-    INFO = 1 << 0
-    NOTICE = 1 << 1
-    WARNING = 1 << 2
-    ERR = 1 << 3
-    DEBUG = 1 << 4
-    SUBSCRIBE = 1 << 5
-    UNSUBSCRIBE = 1 << 6
-    WEBSOCKETS = 1 << 7
-    INTERNAL = 0x80000000
-    ALL = 0xFFFFFFFF
+from .constants import ErrorCode
 
 
 class MosquittoError(Exception):
@@ -173,7 +63,7 @@ def to_python(obj):
     return C.cast(obj, C.py_object).value
 
 
-call(libmosq.mosquitto_lib_init)
+libmosq.mosquitto_lib_init()
 atexit.register(libmosq.mosquitto_lib_cleanup)
 
 
@@ -181,11 +71,13 @@ class Mosquitto:
     def __init__(self, client_id=None, clean_start=True, userdata=None):
         if client_id:
             client_id = client_id.encode()
-        self._c_mosq_p = call(
-            libmosq.mosquitto_new, client_id, clean_start, userdata, use_errno=True
+        self._c_mosq_p, err = call(
+            libmosq.mosquitto_new, client_id, clean_start, userdata
         )
+        if err != 0:
+            raise OSError(err, os.strerror(err))
         self._finalizer = weakref.finalize(
-            self, call, libmosq.mosquitto_destroy, self._c_mosq_p
+            self, libmosq.mosquitto_destroy, self._c_mosq_p
         )
         self.__connect_callback = None
         self.__disconnect_callback = None
@@ -196,7 +88,9 @@ class Mosquitto:
         self.__log_callback = None
 
     def _call(self, func, *args, use_errno=False):
-        rc = call(func, self._c_mosq_p, *args, use_errno=use_errno)
+        if use_errno:
+            C.set_errno(0)
+        rc = func(self._c_mosq_p, *args)
         if rc == ErrorCode.ERRNO:
             errno = C.get_errno()
             raise OSError(errno, os.strerror(errno))
