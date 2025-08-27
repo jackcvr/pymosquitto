@@ -25,8 +25,8 @@ def on_message(client, userdata, msg):
 
 
 client = MQTTClient()
+client.on_connect = lambda *_: client.subscribe("#", 1)
 client.on_message = on_message
-client.subscribe("#", 1)
 client.connect_async("localhost", 1883)
 client.loop_forever()
 ```
