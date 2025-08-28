@@ -1,15 +1,14 @@
 import threading
 import ctypes as C
-import os
 
 from .base import (
     Mosquitto,
-    to_python,
+    cast_to_pyobject,
     MQTTMessage,
     MosquittoError,
     ErrorCode,
 )
-from .cutils import call
+from .cutils import call, os_error
 from .constants import LogLevel
 
 
@@ -97,7 +96,7 @@ class MQTTClient(Mosquitto):
         for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
             _, err = call(libc.signal, sig, _stop)
             if err != 0:
-                raise OSError(err, os.strerror(err))
+                raise os_error(err)
 
         super().loop_forever(timeout)
 
@@ -128,36 +127,36 @@ class MQTTClient(Mosquitto):
 
     def _on_connect(self, mosq, userdata, rc):
         if self._connect_callback:
-            self._connect_callback(self, to_python(userdata), rc)
+            self._connect_callback(self, cast_to_pyobject(userdata), rc)
 
     def _on_disconnect(self, mosq, userdata, rc):
         if self._disconnect_callback:
-            self._disconnect_callback(self, to_python(userdata), rc)
+            self._disconnect_callback(self, cast_to_pyobject(userdata), rc)
 
     def _on_subscribe(self, mosq, userdata, mid, qos_count, granted_qos):
         if self._subscribe_callback:
             self._subscribe_callback(
-                self, to_python(userdata), mid, qos_count, granted_qos
+                self, cast_to_pyobject(userdata), mid, qos_count, granted_qos
             )
 
     def _on_unsubscribe(self, mosq, userdata, mid):
         if self._unsubscribe_callback:
-            self._unsubscribe_callback(self, to_python(userdata), mid)
+            self._unsubscribe_callback(self, cast_to_pyobject(userdata), mid)
 
     def _on_publish(self, mosq, userdata, mid):
         if self._publish_callback:
-            self._publish_callback(self, to_python(userdata), mid)
+            self._publish_callback(self, cast_to_pyobject(userdata), mid)
 
     def _on_message(self, mosq, userdata, msg):
-        msg = MQTTMessage.from_c(msg)
+        msg = MQTTMessage.from_cmsg(msg)
         if self._message_callback:
-            self._message_callback(self, to_python(userdata), msg)
+            self._message_callback(self, cast_to_pyobject(userdata), msg)
         else:
             if not self._handlers:
                 return
             _userdata = None
             for handler in self._handlers.find(msg.topic):
-                _userdata = _userdata or to_python(userdata)
+                _userdata = _userdata or cast_to_pyobject(userdata)
                 try:
                     handler(self, userdata, msg)
                 except Exception as e:
@@ -165,4 +164,8 @@ class MQTTClient(Mosquitto):
 
     def _on_log(self, mosq, userdata, level, msg):
         if self._log_callback:
-            self._log_callback(self, to_python(userdata), LogLevel(level), msg.decode())
+            self._log_callback(
+                self, cast_to_pyobject(userdata), LogLevel(level), msg.decode()
+            )
+        elif self._logger:
+            self._logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())

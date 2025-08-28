@@ -23,6 +23,5 @@ count = 0
 client = MQTTClient(logger=logger)
 client.on_connect = lambda *_: client.subscribe(c.TOPIC, c.QOS)
 client.on_message = on_message
-client.on_log = lambda *args: print(args)
 client.connect_async(c.HOST, c.PORT)
 client.loop_forever()

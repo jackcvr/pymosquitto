@@ -35,7 +35,7 @@ class MQTTMessage(t.NamedTuple):
     retain: bool = False
 
     @classmethod
-    def from_c(cls, cmsg):
+    def from_cmsg(cls, cmsg):
         contents = cmsg.contents
         return cls(
             mid=contents.mid,
@@ -58,7 +58,7 @@ def reason_string(rc):
     return libmosq.mosquitto_reason_string(rc).decode()
 
 
-def to_python(obj):
+def cast_to_pyobject(obj):
     return C.cast(obj, C.py_object).value
 
 

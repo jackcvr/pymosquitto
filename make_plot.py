@@ -2,18 +2,16 @@ import matplotlib.pyplot as plt
 
 # TODO: generate automatically after benchmark
 TIME = {
-    "PyMosquitto": 4.82,
-    "Paho": 11.19,
-    "aMQTT": 62.55,
+    "PyMosquitto": 05.87,
+    "Paho": 09.66,
 }
-PYTHON_MEMORY = 8.632
+PYTHON_MEMORY = 10.420
 MEMORY = {
-    "PyMosquitto": 13.704 - PYTHON_MEMORY,
-    "Paho": 19.804 - PYTHON_MEMORY,
-    "aMQTT": 28.200 - PYTHON_MEMORY,
+    "PyMosquitto": 17.668 - PYTHON_MEMORY,
+    "Paho": 23.480 - PYTHON_MEMORY,
 }
 
-plt.figure(figsize=(6, 3))
+plt.figure(figsize=(4, 2))
 
 plt.subplot(121)
 plt.title("Time/sec")

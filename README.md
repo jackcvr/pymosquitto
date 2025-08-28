@@ -36,29 +36,22 @@ client.loop_forever()
 
 Receiving 1 million messages with QoS 0.
 
-*The Python interpreter overhead(8.632 MB) has been excluded from the memory plot.
+*The Python interpreter overhead(10.420 MB) has been excluded from the memory plot.
 
 ![benchmark-results](./results.png)
 
 **PyMosquitto**
 
 ```text
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:04.82
-Maximum resident set size (kbytes): 13704
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.87
+Maximum resident set size (kbytes): 17668
 ```
 
 **Paho-MQTT**
 
 ```text
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:11.19
-Maximum resident set size (kbytes): 19804
-```
-
-**aMQTT**
-```text
-Elapsed (wall clock) time (h:mm:ss or m:ss): 1:02.55
-Maximum resident set size (kbytes): 28200
-
+Elapsed (wall clock) time (h:mm:ss or m:ss): 0:09.66
+Maximum resident set size (kbytes): 23480
 ```
 
 

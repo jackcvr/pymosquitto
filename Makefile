@@ -12,24 +12,27 @@ PUB_INTERVAL ?= 0
 
 export PREFIX MQTT_QOS MQTT_LIMIT PUB_INTERVAL
 
-test: build_image
+test: build
 	$(DC_RUN) py pytest -s
 
-bench: clean
-	$(DC) build
-	$(MAKE) bench-pymosq
+bench: clean build
+	$(DC_RUN) py && $(DC) logs py
 	sleep 1
 	$(MAKE) bench-paho
 	sleep 1
-	$(MAKE) PUB_AMOUNT=100000000 bench-amqtt
+	$(MAKE) bench-pymosq
+	sleep 1
+
+.PHONY: build
+build:
+	$(DC) build
 
 bench-%:
 	$(TRAP)
 	PREFIX=$* $(DC_RUN) pub
 	$(DC) logs sub
 
-.PHONY: build
-build:
+package:
 	$(DC_RUN) py rm -rf dist/
 	$(DC_RUN) py sh -c "python -m build && twine upload --verbose -r testpypi dist/*"
 

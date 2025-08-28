@@ -17,7 +17,6 @@ dev = [
     "pytest",
     "matplotlib",
     "paho-mqtt",
-    "amqtt",
 ]
 
 [tool.black]

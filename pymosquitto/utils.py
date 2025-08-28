@@ -12,7 +12,7 @@ class _Node:
 
 class TopicMatcher:
     def __init__(self) -> None:
-        self._root: _Node = _Node()
+        self._root = _Node()
 
     def __setitem__(self, key: str, value: t.Any) -> None:
         node = self._root
