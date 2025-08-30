@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
 
-from . import config as c
+from benchmarks import config as c
 
 
 def on_connect(client, userdata, flags, rc, props):

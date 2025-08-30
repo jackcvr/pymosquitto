@@ -2,7 +2,7 @@ import asyncio
 
 from amqtt.client import MQTTClient
 
-from . import config as c
+from benchmarks import config as c
 
 
 async def main():
@@ -12,7 +12,9 @@ async def main():
     await client.subscribe([(c.TOPIC, c.QOS)])
     while count < c.LIMIT:
         await client.deliver_message()
-        count += 1
+        # count += 1
+        # if count % 10 == 0:
+        #     print(count)
     print("DONE")
     await client.disconnect()
 

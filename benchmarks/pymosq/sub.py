@@ -1,6 +1,6 @@
 from pymosquitto.client import MQTTClient
 
-from . import config as c
+from benchmarks import config as c
 
 logger = None
 

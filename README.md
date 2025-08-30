@@ -9,7 +9,7 @@ Lightweight Python MQTT client implemented as a simple wrapper over libmosquitto
 - libmosquitto1
 
 
-## Installation
+## Installation (in progress)
 
 - pip install pymosquitto
 
@@ -36,22 +36,19 @@ client.loop_forever()
 
 Receiving 1 million messages with QoS 0.
 
-*The Python interpreter overhead(10.420 MB) has been excluded from the memory plot.
+*The Python interpreter overhead(~10.4 MB) has been excluded from the memory plot.
 
 ![benchmark-results](./results.png)
 
-**PyMosquitto**
+**benchmark.csv**
 
 ```text
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.87
-Maximum resident set size (kbytes): 17668
-```
-
-**Paho-MQTT**
-
-```text
-Elapsed (wall clock) time (h:mm:ss or m:ss): 0:09.66
-Maximum resident set size (kbytes): 23480
+Module;Time;RSS
+pymosq;0:05.45;17724
+paho;0:09.73;23252
+aiomqtt;0:54.16;578064
+amqtt;0;0
+gmqtt;0:04.51;25152
 ```
 
 
