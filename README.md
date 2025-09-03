@@ -31,6 +31,8 @@ client.connect_async("localhost", 1883)
 client.loop_forever()
 ```
 
+Check out more examples in `tests/test_client.py`.
+
 
 ## Benchmarks
 

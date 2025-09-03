@@ -1,8 +1,7 @@
 import ctypes as C
 import typing as t
 
-from pymosquitto.constants import LIBMOSQ_PATH
-from pymosquitto.cutils import check_libmosq_version
+from pymosquitto.constants import LIBMOSQ_PATH, LIBMOSQ_MIN_MAJOR_VERSION
 
 libmosq = C.CDLL(LIBMOSQ_PATH, use_errno=True)
 
@@ -26,7 +25,8 @@ LIBMOSQ_VERSION = (
 )
 del _libmosq_version
 
-check_libmosq_version(LIBMOSQ_VERSION)
+if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
+    raise RuntimeError(f"libmosquitto version {LIBMOSQ_MIN_MAJOR_VERSION}+ is required")
 
 
 class CMessage(C.Structure):
@@ -59,15 +59,15 @@ class MQTTMessage(t.NamedTuple):
         )
 
 
-CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
+CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
+DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
 SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
-    None, C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.POINTER(C.c_int)
+    None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int)
 )
-UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int)
-MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.POINTER(CMessage))
-LOG_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.c_void_p, C.c_int, C.c_char_p)
+UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.py_object, C.c_void_p, C.c_int)
+PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.py_object, C.c_void_p, C.c_int)
+MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.py_object, C.c_void_p, C.POINTER(CMessage))
+LOG_CALLBACK = C.CFUNCTYPE(None, C.py_object, C.c_void_p, C.c_int, C.c_char_p)
 
 # const char *mosquitto_strerror(int mosq_errno)
 libmosq.mosquitto_strerror.argtypes = (C.c_int,)
@@ -96,6 +96,10 @@ libmosq.mosquitto_new.restype = C.c_void_p
 # void mosquitto_destroy(struct mosquitto *mosq)
 libmosq.mosquitto_destroy.argtypes = (C.c_void_p,)
 libmosq.mosquitto_destroy.restype = None
+
+# int mosquitto_username_pw_set(struct mosquitto *mosq, const char *username, const char *password)
+libmosq.mosquitto_username_pw_set.argtypes = (C.c_void_p, C.c_char_p, C.c_char_p)
+libmosq.mosquitto_username_pw_set.restype = C.c_int
 
 # int mosquitto_connect(struct mosquitto *mosq, const char *host, int port, int keepalive)
 libmosq.mosquitto_connect.argtypes = (C.c_void_p, C.c_char_p, C.c_int, C.c_int)

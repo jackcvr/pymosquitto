@@ -1,6 +1,9 @@
 DC 		:= docker compose
 DC_RUN	:= $(DC) run --rm
 DC_DOWN := $(DC) down --remove-orphans
+FILTER_VALUE := sed -E 's/.*: //'
+TO_NULL := 1>/dev/null 2>&1
+PYTEST := pytest -s --log-cli-level=DEBUG
 
 MODULE       ?= pymosq
 MQTT_QOS     ?= 0
@@ -13,15 +16,19 @@ export MODULE \
 	MQTT_LIMIT \
 	PUB_INTERVAL
 
-.PHONY: build
+.PHONY: build test bench-all bench plot pack publish clean
+
 build:
 	$(DC) build
 
 test:
-	$(DC_RUN) py pytest -s
+	$(DC_RUN) py $(PYTEST)
+
+test-%:
+	$(DC_RUN) py $(PYTEST) -k $*
 
 bench-all:
-	@PY_RSS=$$($(DC_RUN) py 2>&1 | grep "Maximum resident set size" | sed -E 's/.*: //') \
+	@PY_RSS=$$($(DC_RUN) py 2>&1 | grep "Maximum resident set size" | $(FILTER_VALUE)) \
 		&& echo "Python RSS: $$PY_RSS" \
 		&& echo "Module;Time;RSS" > benchmark.csv
 	@for module in pymosq paho gmqtt aiomqtt amqtt; do \
@@ -31,11 +38,11 @@ bench-all:
 	done
 
 bench:
-	@$(DC) build 1>/dev/null 2>&1
-	@trap '$(DC_DOWN) 1>/dev/null 2>&1' EXIT INT TERM \
+	@$(MAKE) -s build $(TO_NULL)
+	@trap '$(DC_DOWN) $(TO_NULL)' EXIT INT TERM \
 		&& OUTPUT=$$($(DC_RUN) sub 2>&1) \
-		&& TIME=$$(echo "$$OUTPUT" | grep "Elapsed (wall clock)" | sed -E 's/.*: //') \
-		&& RSS=$$(echo "$$OUTPUT" | grep "Maximum resident set size" | sed -E 's/.*: //') \
+		&& TIME=$$(echo "$$OUTPUT" | grep "Elapsed (wall clock)" | $(FILTER_VALUE)) \
+		&& RSS=$$(echo "$$OUTPUT" | grep "Maximum resident set size" | $(FILTER_VALUE)) \
 		&& echo "$$MODULE;$$TIME;$$RSS" || echo "$$MODULE;0;0"
 
 plot:
@@ -43,7 +50,7 @@ plot:
 
 pack: dist
 
-dist:
+dist: test
 	$(DC_RUN) py sh -c "python -m build && twine upload --verbose -r testpypi dist/*"
 
 publish:

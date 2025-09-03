@@ -2,6 +2,7 @@
 __pycache__/
 dist/
 build/
+.env
 *.egg-info
 *.override.*
 memray-*

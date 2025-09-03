@@ -5,10 +5,10 @@ from .base import (
     Mosquitto,
     MosquittoError,
     ErrorCode,
+    AutoOSError,
 )
 from pymosquitto.bindings import call, MQTTMessage
-from .cutils import os_error
-from .constants import LogLevel
+from .constants import LogLevel, ConnackCode
 
 
 class UserCallback:
@@ -95,7 +95,7 @@ class MQTTClient(Mosquitto):
         for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
             _, err = call(libc.signal, sig, _stop)
             if err != 0:
-                raise os_error(err)
+                raise AutoOSError(err)
 
         super().loop_forever(timeout)
 
@@ -126,7 +126,7 @@ class MQTTClient(Mosquitto):
 
     def _on_connect(self, mosq, userdata, rc):
         if self._connect_callback:
-            self._connect_callback(self, userdata, rc)
+            self._connect_callback(self, userdata, ConnackCode(rc))
 
     def _on_disconnect(self, mosq, userdata, rc):
         if self._disconnect_callback:

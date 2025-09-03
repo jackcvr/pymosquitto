@@ -17,6 +17,25 @@ EXCLUDE = (
 )
 
 
+@pytest.fixture(scope="module")
+def mosq():
+    rc = libmosq.mosquitto_lib_init()
+    if rc != 0:
+        raise Exception(f"mosquitto_lib_init error: {strerror(rc)}")
+    obj = None
+    try:
+        C.set_errno(0)
+        obj = libmosq.mosquitto_new(None, True, None)
+        rc = C.get_errno()
+        if rc != 0:
+            raise Exception(f"mosquitto_new error: {strerror(rc)}")
+        yield obj
+    finally:
+        if obj:
+            libmosq.mosquitto_destroy(obj)
+        libmosq.mosquitto_lib_cleanup()
+
+
 def test_call():
     ptr = C.cast(C.pointer(C.c_int()), C.c_void_p)
     _, err = call(libc.read, ptr)
@@ -36,25 +55,6 @@ def test_connack_string():
 def test_reason_string():
     msg = reason_string(ReasonCode.BANNED)
     assert msg == "Banned"
-
-
-@pytest.fixture(scope="module")
-def mosq():
-    rc = libmosq.mosquitto_lib_init()
-    if rc != 0:
-        raise Exception(f"mosquitto_lib_init error: {strerror(rc)}")
-    obj = None
-    try:
-        C.set_errno(0)
-        obj = libmosq.mosquitto_new(None, True, None)
-        rc = C.get_errno()
-        if rc != 0:
-            raise Exception(f"mosquitto_new error: {strerror(rc)}")
-        yield obj
-    finally:
-        if obj:
-            libmosq.mosquitto_destroy(obj)
-        libmosq.mosquitto_lib_cleanup()
 
 
 lib_functions = [

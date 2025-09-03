@@ -1,8 +1,7 @@
 import ctypes as C
 import atexit
 import weakref
-
-from .cutils import os_error
+import os
 
 from .bindings import (
     libmosq,
@@ -17,6 +16,11 @@ from .bindings import (
     call,
 )
 from .constants import ErrorCode
+
+
+class AutoOSError(Exception):
+    def __new__(cls, code):
+        return OSError(code, os.strerror(code))
 
 
 class MosquittoError(Exception):
@@ -42,11 +46,12 @@ class Mosquitto:
 
         if client_id:
             client_id = client_id.encode()
+        self._userdata = userdata
         self._c_mosq_p, err = call(
-            libmosq.mosquitto_new, client_id, clean_start, userdata
+            libmosq.mosquitto_new, client_id, clean_start, self._userdata
         )
         if err != 0:
-            raise os_error(err)
+            raise AutoOSError(err)
         self._finalizer = weakref.finalize(
             self, libmosq.mosquitto_destroy, self._c_mosq_p
         )
@@ -58,11 +63,15 @@ class Mosquitto:
         self.__message_callback = None
         self.__log_callback = None
 
+    @property
+    def userdata(self):
+        return self._userdata
+
     def _call(self, func, *args, use_errno=False):
         if use_errno:
             ret, err = call(func, self._c_mosq_p, *args)
             if ret == ErrorCode.ERRNO:
-                raise os_error(err)
+                raise AutoOSError(err)
         else:
             ret = func(self._c_mosq_p, *args)
         if ret == 0:
@@ -74,6 +83,13 @@ class Mosquitto:
     def destroy(self):
         if self._finalizer.alive:
             self._finalizer()
+
+    def username_pw_set(self, username=None, password=None):
+        if username is not None:
+            username = username.encode()
+        if password is not None:
+            password = password.encode()
+        self._call(libmosq.mosquitto_username_pw_set, username, password)
 
     def connect(self, host, port=1883, keepalive=60):
         self._call(
