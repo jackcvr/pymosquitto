@@ -27,6 +27,8 @@ class UserCallback:
 
     def __set__(self, obj, func):
         setattr(obj, self.callback_name, func)
+        if obj._logger:
+            obj._logger.debug("CALLBACK: %s %s", self.callback_name, func)
 
 
 class MQTTClient(Mosquitto):
@@ -103,9 +105,13 @@ class MQTTClient(Mosquitto):
         if self._handlers is None:
             self._handlers = self._handlers_factory()
         self._handlers[topic] = func
+        if self._logger:
+            self._logger.debug("HANDLER: %s %s", topic, func)
 
     def remove_topic_handler(self, topic):
         del self._handlers[topic]
+        if self._logger:
+            self._logger.debug("HANDLER_DEL: %s", topic)
 
     def on_topic(self, topic):
         def decorator(func):
@@ -134,7 +140,13 @@ class MQTTClient(Mosquitto):
 
     def _on_subscribe(self, mosq, userdata, mid, qos_count, granted_qos):
         if self._subscribe_callback:
-            self._subscribe_callback(self, userdata, mid, qos_count, granted_qos)
+            self._subscribe_callback(
+                self,
+                userdata,
+                mid,
+                qos_count,
+                [granted_qos[i] for i in range(qos_count)],
+            )
 
     def _on_unsubscribe(self, mosq, userdata, mid):
         if self._unsubscribe_callback:
@@ -146,14 +158,14 @@ class MQTTClient(Mosquitto):
 
     def _on_message(self, mosq, userdata, msg):
         msg = MQTTMessage.from_cmessage(msg)
+        if self._logger:
+            self._logger.debug("RECV: %s", msg)
         if self._message_callback:
             self._message_callback(self, userdata, msg)
         else:
             if not self._handlers:
                 return
-            _userdata = None
             for handler in self._handlers.find(msg.topic):
-                _userdata = _userdata or userdata
                 try:
                     handler(self, userdata, msg)
                 except Exception as e:

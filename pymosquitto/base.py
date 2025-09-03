@@ -142,12 +142,14 @@ class Mosquitto:
 
     def publish(self, topic, payload, qos=0, retain=False):
         mid = C.c_int(0)
+        if isinstance(payload, str):
+            payload = payload.encode()
         self._call(
             libmosq.mosquitto_publish,
             C.byref(mid),
             topic.encode(),
             len(payload),
-            C.c_char_p(payload.encode()),
+            C.c_char_p(payload),
             qos,
             retain,
         )
