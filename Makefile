@@ -39,9 +39,10 @@ bench-all:
 		echo "$$LINE" >>benchmark.csv; \
 	done
 
-bench:
+bench-%:
 	@$(MAKE) -s build $(DISCARD)
 	@trap '$(DC_DOWN) $(DISCARD)' EXIT INT TERM \
+		&& export MODULE=$* \
 		&& OUTPUT=$$($(DC_RUN) sub 2>&1) \
 		&& TIME=$$(echo "$$OUTPUT" | grep "Elapsed (wall clock)" | $(SED_VALUE)) \
 		&& RSS=$$(echo "$$OUTPUT" | grep "Maximum resident set size" | $(SED_VALUE)) \

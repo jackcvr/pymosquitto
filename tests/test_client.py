@@ -91,6 +91,8 @@ def test_on_message(client):
 
 
 def test_on_topic(client):
+    test_topic = "test/+/+"
+
     def _on_sub(client, userdata, mid, count, qos):
         is_sub.set()
 
@@ -103,10 +105,12 @@ def test_on_topic(client):
     is_recv = threading.Condition()
     messages = []
     client.on_subscribe = _on_sub
-    client.on_topic("test/+/+", _on_topic)
-    client.subscribe("test/#", 1)
+    client.on_topic(test_topic, _on_topic)
+    assert client._handlers == {test_topic: _on_topic}
 
+    client.subscribe("test/#", 1)
     assert is_sub.wait(1)
+
     client.publish("test/3", "333", qos=1)
     client.publish("test/1/one", "111", qos=1)
     client.publish("test/2/me", "222", qos=1)
@@ -115,3 +119,21 @@ def test_on_topic(client):
         if not is_recv.wait_for(lambda: len(messages) == 2, timeout=1):
             raise TimeoutError
     assert {m.payload for m in messages} == {b"111", b"222"}
+
+    client.on_topic(test_topic, None)
+    assert client._handlers == {}
+
+
+def test_client_subclass():
+    class MyClient(MQTTClient):
+        def on_connect(self, client, userdata, rc):
+            userdata["rc"] = rc
+            is_connected.set()
+
+    is_connected = threading.Event()
+    client = MyClient(userdata={}, logger=logging.getLogger())
+    client.username_pw_set(TOKEN)
+    client.connect(HOST, PORT)
+    client.loop_start()
+    assert is_connected.wait(1)
+    assert client.userdata["rc"] == c.ConnackCode.ACCEPTED
