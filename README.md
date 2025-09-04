@@ -55,11 +55,11 @@ Losers excluded:
 **benchmark.csv**
 
 ```text
-Module;Time;RSS
-pymosq;0:04.42;17384
-paho;0:09.50;23048
-gmqtt;0:04.83;24848
-aiomqtt;0:53.68;573284
+Python RSS: 10216
+pymosq;0:04.35;17180
+paho;0:09.27;23184
+gmqtt;0:04.25;24972
+aiomqtt;0:56.98;574220
 amqtt;0;0
 ```
 

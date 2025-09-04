@@ -201,14 +201,14 @@ libmosq.mosquitto_topic_matches_sub.restype = C.c_int
 ### END OF BINDINGS
 
 
-_libmosq_version = (C.c_int(), C.c_int(), C.c_int())
+__version = (C.c_int(), C.c_int(), C.c_int())
 libmosq.mosquitto_lib_version(
-    C.byref(_libmosq_version[0]),
-    C.byref(_libmosq_version[1]),
-    C.byref(_libmosq_version[2]),
+    C.byref(__version[0]),
+    C.byref(__version[1]),
+    C.byref(__version[2]),
 )
-LIBMOSQ_VERSION = tuple([_libmosq_version[i].value for i in range(3)])
-del _libmosq_version
+LIBMOSQ_VERSION = tuple([__version[i].value for i in range(3)])
+del __version
 
 if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
     raise RuntimeError(f"libmosquitto version {LIBMOSQ_MIN_MAJOR_VERSION}+ is required")

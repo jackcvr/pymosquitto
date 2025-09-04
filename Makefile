@@ -34,7 +34,7 @@ bench-all:
 		&& echo "Python RSS: $$PY_RSS" \
 		&& echo "Module;Time;RSS" > benchmark.csv
 	@for module in pymosq paho gmqtt aiomqtt amqtt; do \
-		LINE=$$($(MAKE) -s MODULE=$$module bench); \
+		LINE=$$($(MAKE) -s bench-$$module); \
 		echo "$$LINE"; \
 		echo "$$LINE" >>benchmark.csv; \
 	done
