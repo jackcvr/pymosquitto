@@ -24,7 +24,7 @@ def client_factory():
 def client():
     def _on_connect(client, userdata, rc):
         if rc != c.ConnackCode.ACCEPTED:
-            raise RuntimeError(f"Client connection error: {rc}")
+            raise RuntimeError(f"Client connection error: {rc.value}/{rc.name}")
         is_connected.set()
 
     client = client_factory()
@@ -95,18 +95,23 @@ def test_on_topic(client):
         is_sub.set()
 
     def _on_topic(client, userdata, message):
-        userdata.message = message
-        is_recv.set()
+        with is_recv:
+            messages.append(message)
+            is_recv.notify_all()
 
     is_sub = threading.Event()
-    is_recv = threading.Event()
+    is_recv = threading.Condition()
+    messages = []
     client.on_subscribe = _on_sub
-    client.add_topic_handler("test/me/#", _on_topic)
+    client.on_topic("test/+/+", _on_topic)
     client.subscribe("test/#", 1)
 
     assert is_sub.wait(1)
-    client.publish("test/notme", "123", qos=1)
-    client.publish("test/me/one", "333", qos=1)
+    client.publish("test/3", "333", qos=1)
+    client.publish("test/1/one", "111", qos=1)
+    client.publish("test/2/me", "222", qos=1)
 
-    assert is_recv.wait(1)
-    assert client.userdata.message.payload == b"333"
+    with is_recv:
+        if not is_recv.wait_for(lambda: len(messages) == 2, timeout=1):
+            raise TimeoutError
+    assert {m.payload for m in messages} == {b"111", b"222"}

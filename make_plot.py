@@ -3,7 +3,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 
-PYTHON_RSS = 10400
+PYTHON_RSS = 10200
 
 LOSERS = {"aiomqtt", "amqtt"}
 

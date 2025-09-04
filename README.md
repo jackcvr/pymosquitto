@@ -38,7 +38,7 @@ Check out more examples in `tests/test_client.py`.
 
 Receiving 1 million messages with QoS 0.
 
-*The memory plots exclude the Python interpreter overhead (~10.4 MB).
+*The memory plots exclude the Python interpreter overhead (~10.2 MB).
 
 ![benchmark-results](./results.png)
 
@@ -50,11 +50,11 @@ Losers excluded:
 
 ```text
 Module;Time;RSS
-pymosq;0:05.45;17724
-paho;0:09.73;23252
-aiomqtt;0:54.16;578064
+pymosq;0:04.42;17384
+paho;0:09.50;23048
+gmqtt;0:04.83;24848
+aiomqtt;0:53.68;573284
 amqtt;0;0
-gmqtt;0:04.51;25152
 ```
 
 

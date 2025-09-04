@@ -27,8 +27,6 @@ class UserCallback:
 
     def __set__(self, obj, func):
         setattr(obj, self.callback_name, func)
-        if obj._logger:
-            obj._logger.debug("CALLBACK: %s %s", self.callback_name, func)
 
 
 class MQTTClient(Mosquitto):
@@ -56,11 +54,7 @@ class MQTTClient(Mosquitto):
 
     def _call(self, func, *args, use_errno=False):
         if self._logger:
-            self._logger.debug(
-                "C call: %s%s",
-                func.__name__,
-                (self._c_mosq_p,) + args,
-            )
+            self._logger.debug("CALL: %s%s", func.__name__, (self._c_mosq_p,) + args)
         super()._call(func, *args, use_errno=use_errno)
 
     def _set_default_callbacks(self):
@@ -101,24 +95,22 @@ class MQTTClient(Mosquitto):
 
         super().loop_forever(timeout)
 
-    def add_topic_handler(self, topic, func):
+    def on_topic(self, topic, func=None):
+        if func is None:
+
+            def decorator(func):
+                self.on_topic(topic, func)
+                return func
+
+            return decorator
+
         if self._handlers is None:
             self._handlers = self._handlers_factory()
         self._handlers[topic] = func
-        if self._logger:
-            self._logger.debug("HANDLER: %s %s", topic, func)
+        return None
 
-    def remove_topic_handler(self, topic):
+    def on_topic_remove(self, topic):
         del self._handlers[topic]
-        if self._logger:
-            self._logger.debug("HANDLER_DEL: %s", topic)
-
-    def on_topic(self, topic):
-        def decorator(func):
-            self.add_topic_handler(topic, func)
-            return func
-
-        return decorator
 
     @staticmethod
     def _handlers_factory():
