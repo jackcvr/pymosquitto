@@ -1,7 +1,6 @@
 import ctypes as C
 import atexit
 import weakref
-import os
 
 from .bindings import (
     libmosq,
@@ -12,25 +11,8 @@ from .bindings import (
     MESSAGE_CALLBACK,
     PUBLISH_CALLBACK,
     LOG_CALLBACK,
-    strerror,
     call,
 )
-from .constants import ErrorCode
-
-
-class AutoOSError(Exception):
-    def __new__(cls, code):
-        return OSError(code, os.strerror(code))
-
-
-class MosquittoError(Exception):
-    def __init__(self, func, code):
-        self.func_name = func.__name__
-        self.code = code
-
-    def __str__(self):
-        return f"{self.func_name} failed: {self.code}, {strerror(self.code)}"
-
 
 _libmosq_inited = False
 
@@ -44,14 +26,16 @@ class Mosquitto:
             atexit.register(libmosq.mosquitto_lib_cleanup)
             _libmosq_inited = True
 
-        if client_id:
+        if client_id is not None:
             client_id = client_id.encode()
         self._userdata = userdata
-        self._c_mosq_p, err = call(
-            libmosq.mosquitto_new, client_id, clean_start, self._userdata
+        self._c_mosq_p = call(
+            libmosq.mosquitto_new,
+            client_id,
+            clean_start,
+            self._userdata,
+            use_errno=True,
         )
-        if err != 0:
-            raise AutoOSError(err)
         self._finalizer = weakref.finalize(
             self, libmosq.mosquitto_destroy, self._c_mosq_p
         )
@@ -68,17 +52,7 @@ class Mosquitto:
         return self._userdata
 
     def _call(self, func, *args, use_errno=False):
-        if use_errno:
-            ret, err = call(func, self._c_mosq_p, *args)
-            if ret == ErrorCode.ERRNO:
-                raise AutoOSError(err)
-        else:
-            ret = func(self._c_mosq_p, *args)
-        if ret == 0:
-            return ret
-        elif isinstance(ret, int):
-            raise MosquittoError(func, ret)
-        return ret
+        return call(func, self._c_mosq_p, *args, use_errno=use_errno)
 
     def destroy(self):
         if self._finalizer.alive:
@@ -186,3 +160,11 @@ class Mosquitto:
     def log_callback_set(self, callback):
         self.__log_callback = LOG_CALLBACK(callback)
         self._call(libmosq.mosquitto_log_callback_set, self.__log_callback)
+
+
+def topic_matches_sub(sub, topic):
+    res = C.c_bool(False)
+    call(
+        libmosq.mosquitto_topic_matches_sub, sub.encode(), topic.encode(), C.byref(res)
+    )
+    return res.value

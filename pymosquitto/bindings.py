@@ -1,85 +1,21 @@
 import ctypes as C
-import typing as t
+import os
 
-from pymosquitto.constants import LIBMOSQ_PATH, LIBMOSQ_MIN_MAJOR_VERSION
+from pymosquitto.constants import LIBMOSQ_PATH, LIBMOSQ_MIN_MAJOR_VERSION, ErrorCode
 
 libmosq = C.CDLL(LIBMOSQ_PATH, use_errno=True)
 
+###
+### Library version, init, and cleanup
+###
+
+# int mosquitto_lib_version(int *major, int *minor, int *revision)
 libmosq.mosquitto_lib_version.argtypes = (
     C.POINTER(C.c_int),
     C.POINTER(C.c_int),
     C.POINTER(C.c_int),
 )
 libmosq.mosquitto_lib_version.restype = C.c_int
-
-_libmosq_version = (C.c_int(), C.c_int(), C.c_int())
-libmosq.mosquitto_lib_version(
-    C.byref(_libmosq_version[0]),
-    C.byref(_libmosq_version[1]),
-    C.byref(_libmosq_version[2]),
-)
-LIBMOSQ_VERSION = (
-    _libmosq_version[0].value,
-    _libmosq_version[1].value,
-    _libmosq_version[2].value,
-)
-del _libmosq_version
-
-if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
-    raise RuntimeError(f"libmosquitto version {LIBMOSQ_MIN_MAJOR_VERSION}+ is required")
-
-
-class CMessage(C.Structure):
-    _fields_ = (
-        ("mid", C.c_int),
-        ("topic", C.c_char_p),
-        ("payload", C.c_void_p),
-        ("payloadlen", C.c_int),
-        ("qos", C.c_int),
-        ("retain", C.c_bool),
-    )
-
-
-class MQTTMessage(t.NamedTuple):
-    mid: int
-    topic: str
-    payload: bytes
-    qos: int = 0
-    retain: bool = False
-
-    @classmethod
-    def from_cmessage(cls, msg):
-        contents = msg.contents
-        return cls(
-            mid=contents.mid,
-            topic=C.string_at(contents.topic).decode(),
-            payload=C.string_at(contents.payload, contents.payloadlen),
-            qos=contents.qos,
-            retain=contents.retain,
-        )
-
-
-CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
-    None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int)
-)
-UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-MESSAGE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.POINTER(CMessage))
-LOG_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_char_p)
-
-# const char *mosquitto_strerror(int mosq_errno)
-libmosq.mosquitto_strerror.argtypes = (C.c_int,)
-libmosq.mosquitto_strerror.restype = C.c_char_p
-
-# const char *mosquitto_connack_string(int connack_code)
-libmosq.mosquitto_connack_string.argtypes = (C.c_int,)
-libmosq.mosquitto_connack_string.restype = C.c_char_p
-
-# const char *mosquitto_reason_string(int reason_code)
-libmosq.mosquitto_reason_string.argtypes = (C.c_int,)
-libmosq.mosquitto_reason_string.restype = C.c_char_p
 
 # int mosquitto_lib_init(void)
 libmosq.mosquitto_lib_init.argtypes = tuple()
@@ -89,6 +25,10 @@ libmosq.mosquitto_lib_init.restype = C.c_int
 libmosq.mosquitto_lib_cleanup.argtypes = tuple()
 libmosq.mosquitto_lib_cleanup.restype = C.c_int
 
+###
+### Client creation, destruction, and reinitialisation
+###
+
 # struct mosquitto *mosquitto_new(const char *id, bool clean_start, void *userdata)
 libmosq.mosquitto_new.argtypes = (C.c_char_p, C.c_bool, C.py_object)
 libmosq.mosquitto_new.restype = C.c_void_p
@@ -97,9 +37,17 @@ libmosq.mosquitto_new.restype = C.c_void_p
 libmosq.mosquitto_destroy.argtypes = (C.c_void_p,)
 libmosq.mosquitto_destroy.restype = None
 
+###
+### Username and password
+###
+
 # int mosquitto_username_pw_set(struct mosquitto *mosq, const char *username, const char *password)
 libmosq.mosquitto_username_pw_set.argtypes = (C.c_void_p, C.c_char_p, C.c_char_p)
 libmosq.mosquitto_username_pw_set.restype = C.c_int
+
+###
+### Connecting, reconnecting, disconnecting
+###
 
 # int mosquitto_connect(struct mosquitto *mosq, const char *host, int port, int keepalive)
 libmosq.mosquitto_connect.argtypes = (C.c_void_p, C.c_char_p, C.c_int, C.c_int)
@@ -126,6 +74,22 @@ libmosq.mosquitto_reconnect_delay_set.restype = C.c_int
 libmosq.mosquitto_disconnect.argtypes = (C.c_void_p,)
 libmosq.mosquitto_disconnect.restype = C.c_int
 
+###
+### Publishing, subscribing, unsubscribing
+###
+
+# int mosquitto_publish(struct mosquitto *mosq, int *mid, const char *topic, int payloadlen, const void *payload, int qos, bool retain)
+libmosq.mosquitto_publish.argtypes = (
+    C.c_void_p,
+    C.POINTER(C.c_int),
+    C.c_char_p,
+    C.c_int,
+    C.c_void_p,
+    C.c_int,
+    C.c_bool,
+)
+libmosq.mosquitto_publish.restype = C.c_int
+
 # int mosquitto_subscribe(struct mosquitto *mosq, int *mid, const char *sub, int qos)
 libmosq.mosquitto_subscribe.argtypes = (
     C.c_void_p,
@@ -139,6 +103,10 @@ libmosq.mosquitto_subscribe.restype = C.c_int
 libmosq.mosquitto_unsubscribe.argtypes = (C.c_void_p, C.POINTER(C.c_int), C.c_char_p)
 libmosq.mosquitto_unsubscribe.restype = C.c_int
 
+###
+### Network loop (managed by libmosquitto)
+###
+
 # int mosquitto_loop_start(struct mosquitto *mosq)
 libmosq.mosquitto_loop_start.argtypes = (C.c_void_p,)
 libmosq.mosquitto_loop_start.restype = C.c_int
@@ -151,17 +119,33 @@ libmosq.mosquitto_loop_stop.restype = C.c_int
 libmosq.mosquitto_loop_forever.argtypes = (C.c_void_p, C.c_int, C.c_int)
 libmosq.mosquitto_loop_forever.restype = C.c_int
 
-# int mosquitto_publish(struct mosquitto *mosq, int *mid, const char *topic, int payloadlen, const void *payload, int qos, bool retain)
-libmosq.mosquitto_publish.argtypes = (
-    C.c_void_p,
-    C.POINTER(C.c_int),
-    C.c_char_p,
-    C.c_int,
-    C.c_void_p,
-    C.c_int,
-    C.c_bool,
+###
+### Callbacks
+###
+
+
+class MQTTMessageStruct(C.Structure):
+    _fields_ = (
+        ("mid", C.c_int),
+        ("topic", C.c_char_p),
+        ("payload", C.c_void_p),
+        ("payloadlen", C.c_int),
+        ("qos", C.c_int),
+        ("retain", C.c_bool),
+    )
+
+
+CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
+DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
+SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
+    None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int)
 )
-libmosq.mosquitto_publish.restype = C.c_int
+UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
+PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
+MESSAGE_CALLBACK = C.CFUNCTYPE(
+    None, C.c_void_p, C.py_object, C.POINTER(MQTTMessageStruct)
+)
+LOG_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_char_p)
 
 # void mosquitto_connect_callback_set(struct mosquitto *mosq, void (*on_connect)(struct mosquitto *, void *, int))
 libmosq.mosquitto_connect_callback_set.argtypes = (C.c_void_p, CONNECT_CALLBACK)
@@ -190,6 +174,45 @@ libmosq.mosquitto_message_callback_set.restype = None
 # void mosquitto_log_callback_set(struct mosquitto *mosq, void (*on_log)(struct mosquitto *, void *, int, const char *))
 libmosq.mosquitto_log_callback_set.argtypes = (C.c_void_p, LOG_CALLBACK)
 
+###
+### Utility functions
+###
+
+# const char *mosquitto_strerror(int mosq_errno)
+libmosq.mosquitto_strerror.argtypes = (C.c_int,)
+libmosq.mosquitto_strerror.restype = C.c_char_p
+
+# const char *mosquitto_connack_string(int connack_code)
+libmosq.mosquitto_connack_string.argtypes = (C.c_int,)
+libmosq.mosquitto_connack_string.restype = C.c_char_p
+
+# const char *mosquitto_reason_string(int reason_code)
+libmosq.mosquitto_reason_string.argtypes = (C.c_int,)
+libmosq.mosquitto_reason_string.restype = C.c_char_p
+
+# int mosquitto_topic_matches_sub(const char *sub, const char *topic, bool *result);
+libmosq.mosquitto_topic_matches_sub.argtypes = (
+    C.c_char_p,
+    C.c_char_p,
+    C.POINTER(C.c_bool),
+)
+libmosq.mosquitto_topic_matches_sub.restype = C.c_int
+
+### END OF BINDINGS
+
+
+_libmosq_version = (C.c_int(), C.c_int(), C.c_int())
+libmosq.mosquitto_lib_version(
+    C.byref(_libmosq_version[0]),
+    C.byref(_libmosq_version[1]),
+    C.byref(_libmosq_version[2]),
+)
+LIBMOSQ_VERSION = tuple([_libmosq_version[i].value for i in range(3)])
+del _libmosq_version
+
+if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
+    raise RuntimeError(f"libmosquitto version {LIBMOSQ_MIN_MAJOR_VERSION}+ is required")
+
 
 def strerror(rc):
     return libmosq.mosquitto_strerror(rc).decode()
@@ -203,7 +226,36 @@ def reason_string(rc):
     return libmosq.mosquitto_reason_string(rc).decode()
 
 
-def call(func, *args):
-    C.set_errno(0)
-    ret = func(*args)
-    return ret, C.get_errno()
+class MosquittoError(Exception):
+    def __init__(self, func, code):
+        self.func = func
+        self.code = code
+
+    def __str__(self):
+        return f"{self.func.__name__} failed: {self.code}/{strerror(self.code)}"
+
+
+def call(func, *args, use_errno=False, is_mosq=True):
+    if use_errno:
+        C.set_errno(0)
+        ret = func(*args)
+        err = C.get_errno()
+        if ret == ErrorCode.ERRNO or err != 0:
+            raise OSError(err, os.strerror(err))
+    else:
+        ret = func(*args)
+    if is_mosq and func.restype == C.c_int and ret != 0:
+        raise MosquittoError(func, ret)
+    return ret
+
+
+class MQTTMessage:
+    __slots__ = ("mid", "topic", "payload", "payloadlen", "qos", "retain")
+
+    def __init__(self, msg: MQTTMessageStruct):
+        contents = msg.contents
+        self.mid = contents.mid
+        self.topic = C.string_at(contents.topic).decode()
+        self.payload = C.string_at(contents.payload, contents.payloadlen)
+        self.qos = contents.qos
+        self.retain = contents.retain

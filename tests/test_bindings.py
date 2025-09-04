@@ -36,10 +36,10 @@ def mosq():
         libmosq.mosquitto_lib_cleanup()
 
 
-def test_call():
-    ptr = C.cast(C.pointer(C.c_int()), C.c_void_p)
-    _, err = call(libc.read, ptr)
-    assert err == errno.EBADF
+def test_call_error():
+    with pytest.raises(OSError) as e:
+        call(libc.read, C.byref(C.c_int()), use_errno=True, is_mosq=False)
+    assert e.value.errno == errno.EBADF
 
 
 def test_strerror():

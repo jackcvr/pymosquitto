@@ -1,14 +1,9 @@
-import threading
 import ctypes as C
 
-from .base import (
-    Mosquitto,
-    MosquittoError,
-    ErrorCode,
-    AutoOSError,
-)
-from pymosquitto.bindings import call, MQTTMessage
-from .constants import LogLevel, ConnackCode
+from pymosquitto.bindings import call, MQTTMessage, MosquittoError
+
+from .base import Mosquitto, topic_matches_sub
+from .constants import LogLevel, ConnackCode, ErrorCode
 
 
 class UserCallback:
@@ -33,7 +28,7 @@ class MQTTClient(Mosquitto):
     def __init__(self, *args, logger=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._logger = logger
-        self._handlers = None
+        self._handlers = {}  # dict[str, func]
         self._set_default_callbacks()
         # user callbacks
         self._connect_callback = None
@@ -89,9 +84,7 @@ class MQTTClient(Mosquitto):
                     raise e from None
 
         for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
-            _, err = call(libc.signal, sig, _stop)
-            if err != 0:
-                raise AutoOSError(err)
+            call(libc.signal, sig, _stop, use_errno=True)
 
         super().loop_forever(timeout)
 
@@ -104,19 +97,11 @@ class MQTTClient(Mosquitto):
 
             return decorator
 
-        if self._handlers is None:
-            self._handlers = self._handlers_factory()
         self._handlers[topic] = func
         return None
 
     def on_topic_remove(self, topic):
         del self._handlers[topic]
-
-    @staticmethod
-    def _handlers_factory():
-        from .utils import SafeTopicMatcher
-
-        return SafeTopicMatcher(threading.Lock())
 
     # -----------
     # CALLBACKS
@@ -149,7 +134,7 @@ class MQTTClient(Mosquitto):
             self._publish_callback(self, userdata, mid)
 
     def _on_message(self, mosq, userdata, msg):
-        msg = MQTTMessage.from_cmessage(msg)
+        msg = MQTTMessage(msg)
         if self._logger:
             self._logger.debug("RECV: %s", msg)
         if self._message_callback:
@@ -157,9 +142,11 @@ class MQTTClient(Mosquitto):
         else:
             if not self._handlers:
                 return
-            for handler in self._handlers.find(msg.topic):
+            for sub, func in self._handlers.items():
+                if not topic_matches_sub(sub, msg.topic):
+                    continue
                 try:
-                    handler(self, userdata, msg)
+                    func(self, userdata, msg)
                 except Exception as e:
                     self._logger.exception(e)
 

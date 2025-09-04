@@ -14,6 +14,12 @@ A lightweight Python MQTT client implemented as a thin wrapper around libmosquit
 - pip install pymosquitto
 
 
+## TODO
+
+- make async client
+- implement the remaining bindings
+
+
 ## Usage
 
 ```python
