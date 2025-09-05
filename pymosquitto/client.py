@@ -10,13 +10,13 @@ SENTINEL = object()
 
 class UserCallback:
     def __set_name__(self, owner, name):
-        self.callback_name = f"_{name}_callback"
+        self._name = f"_{name}_callback"
 
     def __get__(self, obj, objtype=None):
-        return getattr(obj, self.callback_name, None)
+        return getattr(obj, self._name, None)
 
     def __set__(self, obj, func):
-        setattr(obj, self.callback_name, func)
+        setattr(obj, self._name, func)
 
 
 class MQTTClient(Mosquitto):

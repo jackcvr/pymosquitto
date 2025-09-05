@@ -120,6 +120,39 @@ libmosq.mosquitto_loop_forever.argtypes = (C.c_void_p, C.c_int, C.c_int)
 libmosq.mosquitto_loop_forever.restype = C.c_int
 
 ###
+### Network loop (for use in other event loops)
+###
+
+# int mosquitto_loop_read(struct mosquitto *mosq, int max_packets)
+libmosq.mosquitto_loop_read.argtypes = (C.c_void_p, C.c_int)
+libmosq.mosquitto_loop_read.restype = C.c_int
+
+# int mosquitto_loop_write(struct mosquitto *mosq, int max_packets)
+libmosq.mosquitto_loop_write.argtypes = (C.c_void_p, C.c_int)
+libmosq.mosquitto_loop_write.restype = C.c_int
+
+# int mosquitto_loop_misc(struct mosquitto *mosq)
+libmosq.mosquitto_loop_misc.argtypes = (C.c_void_p,)
+libmosq.mosquitto_loop_misc.restype = C.c_int
+
+###
+### Network loop (helper functions)
+###
+
+# int mosquitto_socket(struct mosquitto *mosq)
+libmosq.mosquitto_socket.argtypes = (C.c_void_p,)
+libmosq.mosquitto_socket.restype = C.c_int
+
+# bool mosquitto_want_write(struct mosquitto *mosq)
+libmosq.mosquitto_want_write.argtypes = (C.c_void_p,)
+libmosq.mosquitto_want_write.restype = C.c_bool
+
+# int mosquitto_threaded_set(struct mosquitto *mosq, bool threaded)
+libmosq.mosquitto_threaded_set.argtypes = (C.c_void_p, C.c_bool)
+libmosq.mosquitto_threaded_set.restype = C.c_int
+
+
+###
 ### Callbacks
 ###
 
@@ -240,7 +273,7 @@ def call(func, *args, use_errno=False, is_mosq=True):
         C.set_errno(0)
         ret = func(*args)
         err = C.get_errno()
-        if ret == ErrorCode.ERRNO or err != 0:
+        if err != 0 and (is_mosq and ret == ErrorCode.ERRNO or not is_mosq):
             raise OSError(err, os.strerror(err))
     else:
         ret = func(*args)

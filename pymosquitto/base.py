@@ -4,17 +4,32 @@ import weakref
 
 from .bindings import (
     libmosq,
+    call,
     CONNECT_CALLBACK,
     DISCONNECT_CALLBACK,
     SUBSCRIBE_CALLBACK,
     UNSUBSCRIBE_CALLBACK,
-    MESSAGE_CALLBACK,
     PUBLISH_CALLBACK,
+    MESSAGE_CALLBACK,
     LOG_CALLBACK,
-    call,
 )
 
 _libmosq_inited = False
+
+
+def callback_setter(lib_func, deco):
+    cb_name = lib_func.__name__[10:-4]  # trim mosquitto_ and _set
+
+    def setter(self, func):
+        if func:
+            func = deco(func)
+            setattr(self, f"__{cb_name}", func)
+        else:
+            func = deco(lambda *_: None)
+        lib_func(self._c_mosq_p, func)
+
+    setter.__name__ = f"{cb_name}_setter"
+    return setter
 
 
 class Mosquitto:
@@ -39,13 +54,26 @@ class Mosquitto:
         self._finalizer = weakref.finalize(
             self, libmosq.mosquitto_destroy, self._c_mosq_p
         )
-        self.__connect_callback = None
-        self.__disconnect_callback = None
-        self.__subscribe_callback = None
-        self.__unsubscribe_callback = None
-        self.__publish_callback = None
-        self.__message_callback = None
-        self.__log_callback = None
+
+    connect_callback_set = callback_setter(
+        libmosq.mosquitto_connect_callback_set, CONNECT_CALLBACK
+    )
+    disconnect_callback_set = callback_setter(
+        libmosq.mosquitto_disconnect_callback_set, DISCONNECT_CALLBACK
+    )
+    subscribe_callback_set = callback_setter(
+        libmosq.mosquitto_subscribe_callback_set, SUBSCRIBE_CALLBACK
+    )
+    unsubscribe_callback_set = callback_setter(
+        libmosq.mosquitto_unsubscribe_callback_set, UNSUBSCRIBE_CALLBACK
+    )
+    publish_callback_set = callback_setter(
+        libmosq.mosquitto_publish_callback_set, PUBLISH_CALLBACK
+    )
+    message_callback_set = callback_setter(
+        libmosq.mosquitto_message_callback_set, MESSAGE_CALLBACK
+    )
+    log_callback_set = callback_setter(libmosq.mosquitto_log_callback_set, LOG_CALLBACK)
 
     @property
     def userdata(self):
@@ -128,38 +156,6 @@ class Mosquitto:
             retain,
         )
         return mid.value
-
-    def connect_callback_set(self, callback):
-        self.__connect_callback = CONNECT_CALLBACK(callback)
-        self._call(libmosq.mosquitto_connect_callback_set, self.__connect_callback)
-
-    def disconnect_callback_set(self, callback):
-        self.__disconnect_callback = DISCONNECT_CALLBACK(callback)
-        self._call(
-            libmosq.mosquitto_disconnect_callback_set, self.__disconnect_callback
-        )
-
-    def subscribe_callback_set(self, callback):
-        self.__subscribe_callback = SUBSCRIBE_CALLBACK(callback)
-        self._call(libmosq.mosquitto_subscribe_callback_set, self.__subscribe_callback)
-
-    def unsubscribe_callback_set(self, callback):
-        self.__unsubscribe_callback = UNSUBSCRIBE_CALLBACK(callback)
-        self._call(
-            libmosq.mosquitto_unsubscribe_callback_set, self.__unsubscribe_callback
-        )
-
-    def publish_callback_set(self, callback):
-        self.__publish_callback = PUBLISH_CALLBACK(callback)
-        self._call(libmosq.mosquitto_publish_callback_set, self.__publish_callback)
-
-    def message_callback_set(self, callback):
-        self.__message_callback = MESSAGE_CALLBACK(callback)
-        self._call(libmosq.mosquitto_message_callback_set, self.__message_callback)
-
-    def log_callback_set(self, callback):
-        self.__log_callback = LOG_CALLBACK(callback)
-        self._call(libmosq.mosquitto_log_callback_set, self.__log_callback)
 
 
 def topic_matches_sub(sub, topic):
