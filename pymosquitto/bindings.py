@@ -1,5 +1,6 @@
 import ctypes as C
 import os
+from dataclasses import dataclass
 
 from pymosquitto.constants import LIBMOSQ_PATH, LIBMOSQ_MIN_MAJOR_VERSION, ErrorCode
 
@@ -262,33 +263,54 @@ def reason_string(rc):
 class MosquittoError(Exception):
     def __init__(self, func, code):
         self.func = func
-        self.code = code
+        self.code = ErrorCode(code)
 
     def __str__(self):
         return f"{self.func.__name__} failed: {self.code}/{strerror(self.code)}"
 
 
-def call(func, *args, use_errno=False, is_mosq=True):
+def call_errno(func, *args):
+    C.set_errno(0)
+    ret = func(*args)
+    return ret, C.get_errno()
+
+
+def call(func, *args, use_errno=False):
     if use_errno:
-        C.set_errno(0)
-        ret = func(*args)
-        err = C.get_errno()
-        if err != 0 and (is_mosq and ret == ErrorCode.ERRNO or not is_mosq):
+        ret, err = call_errno(func, *args)
+        if err != 0:
+            raise OSError(err, os.strerror(err))
+        return ret
+    return func(*args)
+
+
+def mosq_call(func, *args, use_errno=False):
+    if use_errno:
+        ret, err = call_errno(func, *args)
+        if ret == ErrorCode.ERRNO and err != 0:
             raise OSError(err, os.strerror(err))
     else:
         ret = func(*args)
-    if is_mosq and func.restype == C.c_int and ret != 0:
+    if func.restype == C.c_int and ret != 0:
         raise MosquittoError(func, ret)
     return ret
 
 
+@dataclass(frozen=True, slots=True)
 class MQTTMessage:
-    __slots__ = ("mid", "topic", "payload", "payloadlen", "qos", "retain")
+    mid: int
+    topic: str
+    payload: bytes
+    qos: int
+    retain: bool
 
-    def __init__(self, msg: MQTTMessageStruct):
-        contents = msg.contents
-        self.mid = contents.mid
-        self.topic = C.string_at(contents.topic).decode()
-        self.payload = C.string_at(contents.payload, contents.payloadlen)
-        self.qos = contents.qos
-        self.retain = contents.retain
+    @classmethod
+    def from_struct(cls, msg: MQTTMessageStruct):
+        cnt = msg.contents
+        return cls(
+            cnt.mid,
+            C.string_at(cnt.topic).decode(),
+            C.string_at(cnt.payload, cnt.payloadlen),
+            cnt.qos,
+            cnt.retain,
+        )

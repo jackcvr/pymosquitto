@@ -5,6 +5,7 @@ import weakref
 from .bindings import (
     libmosq,
     call,
+    mosq_call,
     CONNECT_CALLBACK,
     DISCONNECT_CALLBACK,
     SUBSCRIBE_CALLBACK,
@@ -13,6 +14,7 @@ from .bindings import (
     MESSAGE_CALLBACK,
     LOG_CALLBACK,
 )
+
 
 _libmosq_inited = False
 
@@ -80,11 +82,31 @@ class Mosquitto:
         return self._userdata
 
     def _call(self, func, *args, use_errno=False):
-        return call(func, self._c_mosq_p, *args, use_errno=use_errno)
+        return mosq_call(func, self._c_mosq_p, *args, use_errno=use_errno)
 
     def destroy(self):
         if self._finalizer.alive:
             self._finalizer()
+
+    def socket(self):
+        fd = call(libmosq.mosquitto_socket, self._c_mosq_p)
+        if fd == -1:
+            return None
+        return fd
+
+    def want_write(self):
+        return call(libmosq.mosquitto_want_write, self._c_mosq_p)
+
+    def loop_read(self):
+        return mosq_call(libmosq.mosquitto_loop_read, self._c_mosq_p, 1, use_errno=True)
+
+    def loop_write(self):
+        return mosq_call(
+            libmosq.mosquitto_loop_write, self._c_mosq_p, 1, use_errno=True
+        )
+
+    def loop_misc(self):
+        return self._call(libmosq.mosquitto_loop_misc)
 
     def username_pw_set(self, username=None, password=None):
         if username is not None:
@@ -132,16 +154,6 @@ class Mosquitto:
     def loop_forever(self, timeout=-1):
         self._call(libmosq.mosquitto_loop_forever, timeout, 1)
 
-    def subscribe(self, topic, qos=0):
-        mid = C.c_int(0)
-        self._call(libmosq.mosquitto_subscribe, C.byref(mid), topic.encode(), qos)
-        return mid.value
-
-    def unsubscribe(self, topic):
-        mid = C.c_int(0)
-        self._call(libmosq.mosquitto_unsubscribe, C.byref(mid), topic.encode())
-        return mid.value
-
     def publish(self, topic, payload, qos=0, retain=False):
         mid = C.c_int(0)
         if isinstance(payload, str):
@@ -155,6 +167,16 @@ class Mosquitto:
             qos,
             retain,
         )
+        return mid.value
+
+    def subscribe(self, topic, qos=0):
+        mid = C.c_int(0)
+        self._call(libmosq.mosquitto_subscribe, C.byref(mid), topic.encode(), qos)
+        return mid.value
+
+    def unsubscribe(self, topic):
+        mid = C.c_int(0)
+        self._call(libmosq.mosquitto_unsubscribe, C.byref(mid), topic.encode())
         return mid.value
 
 

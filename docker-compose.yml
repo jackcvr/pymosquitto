@@ -8,6 +8,7 @@ x-template: &base
   environment:
     MQTT_QOS: ${MQTT_QOS:-0}
     MQTT_LIMIT: ${MQTT_LIMIT:-1000}
+    PUB_INTERVAL: ${PUB_INTERVAL:-1000}
     FLESPI_TOKEN: ${FLESPI_TOKEN:-""}
 
 services:
@@ -29,7 +30,7 @@ services:
     init: true
     depends_on:
       - broker
-    command: pub -c 8 -I ${PUB_INTERVAL:-1000} -t benchmark -s 0
+    command: pub -c 1 -I ${PUB_INTERVAL:-1000} -t benchmark -s 0
 
   sub:
     <<: *base

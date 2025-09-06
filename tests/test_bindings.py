@@ -38,7 +38,7 @@ def mosq():
 
 def test_call_error():
     with pytest.raises(OSError) as e:
-        call(libc.read, C.byref(C.c_int()), use_errno=True, is_mosq=False)
+        call(libc.read, C.byref(C.c_int()), use_errno=True)
     assert e.value.errno == errno.EBADF
 
 

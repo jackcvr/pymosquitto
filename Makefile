@@ -33,7 +33,7 @@ bench-all:
 	@PY_RSS=$$($(DC_RUN) py 2>&1 | grep "Maximum resident set size" | $(SED_VALUE)) \
 		&& echo "Python RSS: $$PY_RSS" \
 		&& echo "Module;Time;RSS" > benchmark.csv
-	@for module in pymosq paho gmqtt aiomqtt amqtt; do \
+	@for module in pymosq pymosq_async paho gmqtt mqttools aiomqtt amqtt; do \
 		LINE=$$($(MAKE) -s bench-$$module); \
 		echo "$$LINE"; \
 		echo "$$LINE" >>benchmark.csv; \

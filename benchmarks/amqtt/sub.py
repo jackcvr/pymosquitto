@@ -12,9 +12,7 @@ async def main():
     await client.subscribe([(c.TOPIC, c.QOS)])
     while count < c.LIMIT:
         await client.deliver_message()
-        # count += 1
-        # if count % 10 == 0:
-        #     print(count)
+        count += 1
     print("DONE")
     await client.disconnect()
 

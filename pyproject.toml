@@ -12,14 +12,17 @@ license = "MIT"
 
 [project.optional-dependencies]
 dev = [
+    "pytest",
+    "pytest-asyncio",
     "build",
     "twine",
-    "pytest",
     "matplotlib",
     "paho-mqtt",
     "aiomqtt",
     "amqtt",
     "gmqtt",
+    "mqttools",
+    "trio-paho-mqtt",
 ]
 
 [tool.black]

@@ -16,7 +16,7 @@ A lightweight Python MQTT client implemented as a thin wrapper around libmosquit
 
 ## TODO
 
-- make async client
+- make async client (IN PROGRESS)
 - implement the remaining bindings
 
 
@@ -37,6 +37,25 @@ client.connect_async("localhost", 1883)
 client.loop_forever()
 ```
 
+Async client example:
+
+```python
+import asyncio
+
+from pymosquitto.aio import AsyncMQTTClient
+
+
+async def main():
+    async with AsyncMQTTClient() as client:
+        await client.connect("localhost", 1883)
+        await client.subscribe("#", 1)
+        async for msg in client.recv_messages():
+            print(msg)
+
+
+asyncio.run(main())
+```
+
 Check out more examples in `tests/test_client.py`.
 
 
@@ -55,11 +74,13 @@ Losers excluded:
 **benchmark.csv**
 
 ```text
-Python RSS: 10216
-pymosq;0:04.35;17180
-paho;0:09.27;23184
-gmqtt;0:04.25;24972
-aiomqtt;0:56.98;574220
+Module;Time;RSS
+pymosq;0:05.58;17268
+pymosq_async;0:09.03;25024
+paho;0:08.38;23364
+gmqtt;0:05.48;24948
+mqttools;0:05.82;28048
+aiomqtt;0:51.85;572576
 amqtt;0;0
 ```
 

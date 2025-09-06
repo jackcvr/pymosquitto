@@ -48,52 +48,6 @@ class MQTTClient(Mosquitto):
         self.message_callback_set(self._on_message)
         self.log_callback_set(self._on_log)
 
-    def loop_forever(self, timeout=-1, *, _direct=False):
-        if _direct:
-            super().loop_forever(timeout)
-            return
-
-        import signal
-
-        libc = C.CDLL(None)
-        HANDLER_FUNC = C.CFUNCTYPE(None, C.c_int)
-        libc.signal.argtypes = [C.c_int, HANDLER_FUNC]
-        libc.signal.restype = HANDLER_FUNC
-
-        @HANDLER_FUNC
-        def _stop(signum):
-            if self._logger:
-                self._logger.debug("Caught signal: %s", signal.Signals(signum).name)
-            try:
-                self.disconnect()
-            except MosquittoError as e:
-                if e.code != ErrorCode.NO_CONN:
-                    raise e from None
-
-        for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
-            call(libc.signal, sig, _stop, use_errno=True)
-
-        super().loop_forever(timeout)
-
-    def on_topic(self, topic, func=SENTINEL):
-        if func is SENTINEL:
-
-            def decorator(func):
-                self.on_topic(topic, func)
-                return func
-
-            return decorator
-
-        if func is not None:
-            self._handlers[topic] = func
-        elif topic in self._handlers:
-            del self._handlers[topic]
-        return None
-
-    # -----------
-    # CALLBACKS
-    # -----------
-
     def _on_connect(self, mosq, userdata, rc):
         if self.on_connect:
             self.on_connect(self, userdata, ConnackCode(rc))
@@ -121,24 +75,70 @@ class MQTTClient(Mosquitto):
             self.on_publish(self, userdata, mid)
 
     def _on_message(self, mosq, userdata, msg):
-        msg = MQTTMessage(msg)
+        msg = MQTTMessage.from_struct(msg)
         if self._logger:
             self._logger.debug("RECV: %s", msg)
         if self.on_message:
             self.on_message(self, userdata, msg)
         else:
-            if not self._handlers:
-                return
-            for sub, func in self._handlers.items():
-                if not topic_matches_sub(sub, msg.topic):
-                    continue
+            for func in self._topic_handlers(msg.topic):
                 try:
-                    func(self, userdata, msg)
+                    func(self, self.userdata, msg)
                 except Exception as e:
                     self._logger.exception(e)
+
+    def _topic_handlers(self, topic):
+        for sub, func in self._handlers.items():
+            if topic_matches_sub(sub, topic):
+                yield func
 
     def _on_log(self, mosq, userdata, level, msg):
         if self.on_log:
             self.on_log(self, userdata, LogLevel(level), msg.decode())
         elif self._logger:
             self._logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
+
+    def disconnect(self, strict=True):
+        try:
+            super().disconnect()
+        except MosquittoError as e:
+            if strict or e.code != ErrorCode.NO_CONN:
+                raise e from None
+
+    def loop_forever(self, timeout=-1, *, _direct=False):
+        if _direct:
+            super().loop_forever(timeout)
+            return
+
+        import signal
+
+        libc = C.CDLL(None)
+        HANDLER_FUNC = C.CFUNCTYPE(None, C.c_int)
+        libc.signal.argtypes = [C.c_int, HANDLER_FUNC]
+        libc.signal.restype = HANDLER_FUNC
+
+        @HANDLER_FUNC
+        def _stop(signum):
+            if self._logger:
+                self._logger.debug("Caught signal: %s", signal.Signals(signum).name)
+            self.disconnect(strict=False)
+
+        for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
+            call(libc.signal, sig, _stop, use_errno=True)
+
+        super().loop_forever(timeout)
+
+    def on_topic(self, topic, func=SENTINEL):
+        if func is SENTINEL:
+
+            def decorator(func):
+                self.on_topic(topic, func)
+                return func
+
+            return decorator
+
+        if func is not None:
+            self._handlers[topic] = func
+        elif topic in self._handlers:
+            del self._handlers[topic]
+        return None

@@ -74,7 +74,7 @@ def test_on_message(client):
     client.on_publish = _on_pub
     client.on_subscribe = _on_sub
     client.on_message = _on_message
-    client.subscribe("test", 1)
+    client.subscribe("test", qos=1)
 
     assert is_sub.wait(1)
     assert client.userdata.sub_mid
@@ -107,7 +107,7 @@ def test_on_topic(client):
     client.on_topic(test_topic, _on_topic)
     assert client._handlers == {test_topic: _on_topic}
 
-    client.subscribe("test/#", 1)
+    client.subscribe("test/#", qos=1)
     assert is_sub.wait(1)
 
     client.publish("test/3", "333", qos=1)

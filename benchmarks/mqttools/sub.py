@@ -1,14 +1,18 @@
 import asyncio
-import aiomqtt
+
+import mqttools
 
 from benchmarks import config as c
 
 
 async def main():
-    count = 0
-    async with aiomqtt.Client(c.HOST) as client:
+    async with mqttools.Client(c.HOST, c.PORT) as client:
         await client.subscribe(c.TOPIC, c.QOS)
-        async for _ in client.messages:
+        count = 0
+        while True:
+            msg = await client.messages.get()
+            if msg is None:
+                break
             count += 1
             if count == c.LIMIT:
                 print("DONE")

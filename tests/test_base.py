@@ -10,7 +10,7 @@ from pymosquitto import constants as c
 
 
 @pytest.fixture(scope="session")
-def mosquitto_factory(token):
+def client_factory(token):
     def _factory():
         client = Mosquitto(userdata=SimpleNamespace())
         client.username_pw_set(token)
@@ -20,13 +20,13 @@ def mosquitto_factory(token):
 
 
 @pytest.fixture(scope="module")
-def client(mosquitto_factory, host, port):
+def client(client_factory, host, port):
     def _on_connect(client, userdata, rc):
         if rc != c.ConnackCode.ACCEPTED:
             raise RuntimeError(f"Client connection error: {rc.value}/{rc.name}")
         is_connected.set()
 
-    client = mosquitto_factory()
+    client = client_factory()
     is_connected = threading.Event()
     client.connect_callback_set(_on_connect)
     client.connect(host, port)
@@ -87,7 +87,7 @@ def test_on_message(client):
         is_sub.set()
 
     def _on_message(client, userdata, message):
-        userdata.message = MQTTMessage(message)
+        userdata.message = MQTTMessage.from_struct(message)
         is_recv.set()
 
     is_sub = threading.Event()
