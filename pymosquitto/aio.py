@@ -1,4 +1,5 @@
 import asyncio
+import weakref
 
 from pymosquitto.bindings import MosquittoError, connack_string
 from pymosquitto.client import Mosquitto
@@ -15,9 +16,9 @@ class AsyncClient(Mosquitto):
         self._cond = asyncio.Condition()
         self._conn_rc = None
         self._disconn_rc = None
-        self._pub_mids = {}
-        self._sub_mids = {}
-        self._unsub_mids = {}
+        self._pub_mids = weakref.WeakValueDictionary()
+        self._sub_mids = weakref.WeakValueDictionary()
+        self._unsub_mids = weakref.WeakValueDictionary()
         self._messages = asyncio.Queue()
 
     async def __aenter__(self):
@@ -49,7 +50,6 @@ class AsyncClient(Mosquitto):
 
     def _on_connect(self, mosq, userdata, rc):
         self._loop.create_task(self._setattr("_conn_rc", rc))
-        self._check_writable()
 
     def _on_disconnect(self, mosq, userdata, rc):
         fd = self.socket()
@@ -61,23 +61,24 @@ class AsyncClient(Mosquitto):
             self._misc_task = None
         self._messages.put_nowait(None)
         self._loop.create_task(self._setattr("_disconn_rc", rc))
-        self._check_writable()
 
     def _on_publish(self, mosq, userdata, mid):
         self._resolve_future(self._pub_mids, mid, mid)
-        self._check_writable()
 
     def _on_subscribe(self, mosq, userdata, mid, qos_count, granted_qos):
         self._resolve_future(self._sub_mids, mid, granted_qos)
-        self._check_writable()
 
     def _on_unsubscribe(self, mosq, userdata, mid):
         self._resolve_future(self._unsub_mids, mid, mid)
-        self._check_writable()
+
+    @staticmethod
+    def _resolve_future(mapping, mid, value):
+        fut = mapping.get(mid)
+        if fut is not None and not fut.done():
+            fut.set_result(value)
 
     def _on_message(self, mosq, userdata, msg):
         self._messages.put_nowait(msg)
-        self._check_writable()
 
     async def connect(self, *args, **kwargs):
         async with self._cond:
@@ -106,20 +107,23 @@ class AsyncClient(Mosquitto):
 
     async def publish(self, *args, **kwargs):
         mid = super().publish(*args, **kwargs)
-        self._pub_mids[mid] = self._loop.create_future()
-        await self._await_future(self._pub_mids, mid)
+        fut = self._loop.create_future()
+        self._pub_mids[mid] = fut
+        await fut
         return mid
 
     async def subscribe(self, *args, **kwargs):
         mid = super().subscribe(*args, **kwargs)
-        self._sub_mids[mid] = self._loop.create_future()
-        await self._await_future(self._sub_mids, mid)
+        fut = self._loop.create_future()
+        self._sub_mids[mid] = fut
+        await fut
         return mid
 
     async def unsubscribe(self, *args, **kwargs):
         mid = super().unsubscribe(*args, **kwargs)
-        self._unsub_mids[mid] = self._loop.create_future()
-        await self._await_future(self._unsub_mids, mid)
+        fut = self._loop.create_future()
+        self._unsub_mids[mid] = fut
+        await fut
         return mid
 
     async def recv_messages(self):
@@ -151,6 +155,7 @@ class AsyncClient(Mosquitto):
     async def misc_loop(self):
         while True:
             try:
+                self._check_writable()
                 self.loop_misc()
                 await asyncio.sleep(self.MISC_SLEEP_TIME)
             except asyncio.CancelledError:
@@ -160,16 +165,3 @@ class AsyncClient(Mosquitto):
         async with self._cond:
             setattr(self, attr, value)
             self._cond.notify_all()
-
-    @staticmethod
-    async def _await_future(mapping, mid):
-        try:
-            await mapping[mid]
-        finally:
-            del mapping[mid]
-
-    @staticmethod
-    def _resolve_future(mapping, mid, value):
-        fut = mapping.get(mid)
-        if fut is not None and not fut.done():
-            fut.set_result(value)
