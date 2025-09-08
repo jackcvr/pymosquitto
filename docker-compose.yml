@@ -30,7 +30,7 @@ services:
     init: true
     depends_on:
       - broker
-    command: pub -c 1 -I ${PUB_INTERVAL:-1000} -t benchmark -s 0
+    command: pub -c 8 -I ${PUB_INTERVAL:-1000} -t benchmark -s 0
 
   sub:
     <<: *base

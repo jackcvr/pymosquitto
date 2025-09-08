@@ -1,6 +1,6 @@
 import asyncio
 
-from pymosquitto.aio import AsyncMQTTClient
+from pymosquitto.aio import AsyncClient as Client
 
 from benchmarks import config as c
 
@@ -15,7 +15,7 @@ if c.INTERVAL:
 
 async def main():
     count = 0
-    async with AsyncMQTTClient(logger=logger) as client:
+    async with Client(logger=logger) as client:
         await client.connect(c.HOST, c.PORT)
         await client.subscribe(c.TOPIC, c.QOS)
         async for _ in client.recv_messages():

@@ -13,29 +13,41 @@ from .bindings import (
     PUBLISH_CALLBACK,
     MESSAGE_CALLBACK,
     LOG_CALLBACK,
+    MQTTMessage,
 )
+from .constants import LogLevel
 
 
 _libmosq_inited = False
 
 
-def callback_setter(lib_func, deco):
-    cb_name = lib_func.__name__[10:-4]  # trim mosquitto_ and _set
+class Callback:
+    def __init__(self, lib_func, deco):
+        self._lib_func = lib_func
+        self._deco = deco
+        self._func = None
+        self._callback = None
 
-    def setter(self, func):
-        if func:
-            func = deco(func)
-            setattr(self, f"__{cb_name}", func)
+    def __get__(self, obj, objtype=None):
+        return self._func
+
+    def __set__(self, obj, func):
+        if func is None:
+            func = lambda *_: None  # noqa: E731
+        self._func = func
+        if self._deco is MESSAGE_CALLBACK:
+            self._callback = self._deco(
+                lambda _, userdata, msg: func(
+                    obj, userdata, MQTTMessage.from_struct(msg)
+                )
+            )
         else:
-            func = deco(lambda *_: None)
-        lib_func(self._c_mosq_p, func)
-
-    setter.__name__ = f"{cb_name}_setter"
-    return setter
+            self._callback = self._deco(lambda _, *args: func(obj, *args))
+        self._lib_func(obj.c_mosq_p, self._callback)
 
 
 class Mosquitto:
-    def __init__(self, client_id=None, clean_start=True, userdata=None):
+    def __init__(self, client_id=None, clean_start=True, userdata=None, logger=None):
         global _libmosq_inited
 
         if not _libmosq_inited:
@@ -46,6 +58,7 @@ class Mosquitto:
         if client_id is not None:
             client_id = client_id.encode()
         self._userdata = userdata
+        self._logger = logger
         self._c_mosq_p = call(
             libmosq.mosquitto_new,
             client_id,
@@ -56,33 +69,41 @@ class Mosquitto:
         self._finalizer = weakref.finalize(
             self, libmosq.mosquitto_destroy, self._c_mosq_p
         )
+        self._set_default_callbacks()
 
-    connect_callback_set = callback_setter(
-        libmosq.mosquitto_connect_callback_set, CONNECT_CALLBACK
-    )
-    disconnect_callback_set = callback_setter(
-        libmosq.mosquitto_disconnect_callback_set, DISCONNECT_CALLBACK
-    )
-    subscribe_callback_set = callback_setter(
-        libmosq.mosquitto_subscribe_callback_set, SUBSCRIBE_CALLBACK
-    )
-    unsubscribe_callback_set = callback_setter(
-        libmosq.mosquitto_unsubscribe_callback_set, UNSUBSCRIBE_CALLBACK
-    )
-    publish_callback_set = callback_setter(
-        libmosq.mosquitto_publish_callback_set, PUBLISH_CALLBACK
-    )
-    message_callback_set = callback_setter(
-        libmosq.mosquitto_message_callback_set, MESSAGE_CALLBACK
-    )
-    log_callback_set = callback_setter(libmosq.mosquitto_log_callback_set, LOG_CALLBACK)
+    @property
+    def c_mosq_p(self):
+        return self._c_mosq_p
 
     @property
     def userdata(self):
         return self._userdata
 
+    on_connect = Callback(libmosq.mosquitto_connect_callback_set, CONNECT_CALLBACK)
+    on_disconnect = Callback(
+        libmosq.mosquitto_disconnect_callback_set, DISCONNECT_CALLBACK
+    )
+    on_subscribe = Callback(
+        libmosq.mosquitto_subscribe_callback_set, SUBSCRIBE_CALLBACK
+    )
+    on_unsubscribe = Callback(
+        libmosq.mosquitto_unsubscribe_callback_set, UNSUBSCRIBE_CALLBACK
+    )
+    on_publish = Callback(libmosq.mosquitto_publish_callback_set, PUBLISH_CALLBACK)
+    on_message = Callback(libmosq.mosquitto_message_callback_set, MESSAGE_CALLBACK)
+    on_log = Callback(libmosq.mosquitto_log_callback_set, LOG_CALLBACK)
+
     def _call(self, func, *args, use_errno=False):
+        if self._logger:
+            self._logger.debug("CALL: %s%s", func.__name__, (self._c_mosq_p,) + args)
         return mosq_call(func, self._c_mosq_p, *args, use_errno=use_errno)
+
+    def _set_default_callbacks(self):
+        if self._logger:
+            self.on_log = self._on_log
+
+    def _on_log(self, mosq, userdata, level, msg):
+        self._logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
 
     def destroy(self):
         if self._finalizer.alive:
@@ -97,13 +118,14 @@ class Mosquitto:
     def want_write(self):
         return call(libmosq.mosquitto_want_write, self._c_mosq_p)
 
+    def threaded_set(self, value):
+        return self._call(libmosq.mosquitto_threaded_set, value)
+
     def loop_read(self):
-        return mosq_call(libmosq.mosquitto_loop_read, self._c_mosq_p, 1, use_errno=True)
+        return self._call(libmosq.mosquitto_loop_read, 1, use_errno=True)
 
     def loop_write(self):
-        return mosq_call(
-            libmosq.mosquitto_loop_write, self._c_mosq_p, 1, use_errno=True
-        )
+        return self._call(libmosq.mosquitto_loop_write, 1, use_errno=True)
 
     def loop_misc(self):
         return self._call(libmosq.mosquitto_loop_misc)

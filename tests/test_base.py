@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pymosquitto.base import Mosquitto
-from pymosquitto.bindings import MosquittoError, MQTTMessage
+from pymosquitto.bindings import MosquittoError
 from pymosquitto import constants as c
 
 
@@ -28,7 +28,7 @@ def client(client_factory, host, port):
 
     client = client_factory()
     is_connected = threading.Event()
-    client.connect_callback_set(_on_connect)
+    client.on_connect = _on_connect
     client.connect(host, port)
     client.loop_start()
     assert is_connected.wait(1)
@@ -48,9 +48,9 @@ def cleanup(client):
     try:
         yield
     finally:
-        client.publish_callback_set(None)
-        client.subscribe_callback_set(None)
-        client.message_callback_set(None)
+        client.on_publish = None
+        client.on_subscribe = None
+        client.on_message = None
 
 
 def test_finalizer():
@@ -66,8 +66,8 @@ def test_unset_callbacks(client):
         is_recv.set()
 
     is_recv = threading.Event()
-    client.publish_callback_set(None)
-    client.message_callback_set(_on_message)
+    client.on_publish = None
+    client.on_message = _on_message
     client.subscribe("test", 1)
     client.publish("test", "123", qos=1)
     assert is_recv.wait(1)
@@ -86,16 +86,16 @@ def test_on_message(client):
         userdata.sub_qos = [qos[i] for i in range(count)]
         is_sub.set()
 
-    def _on_message(client, userdata, message):
-        userdata.message = MQTTMessage.from_struct(message)
+    def _on_message(client, userdata, msg):
+        userdata.msg = msg
         is_recv.set()
 
     is_sub = threading.Event()
     is_pub = threading.Event()
     is_recv = threading.Event()
-    client.publish_callback_set(_on_pub)
-    client.subscribe_callback_set(_on_sub)
-    client.message_callback_set(_on_message)
+    client.on_publish = _on_pub
+    client.on_subscribe = _on_sub
+    client.on_message = _on_message
     client.subscribe("test", 1)
 
     assert is_sub.wait(1)
@@ -108,4 +108,4 @@ def test_on_message(client):
     assert client.userdata.pub_mid
 
     assert is_recv.wait(1)
-    assert client.userdata.message.payload == b"123"
+    assert client.userdata.msg.payload == b"123"

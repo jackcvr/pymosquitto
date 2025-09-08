@@ -1,102 +1,33 @@
 import ctypes as C
 
-from pymosquitto.bindings import call, MQTTMessage, MosquittoError
+from pymosquitto.bindings import call, MosquittoError
 
 from .base import Mosquitto, topic_matches_sub
-from .constants import LogLevel, ConnackCode, ErrorCode
+from .constants import ErrorCode
 
 SENTINEL = object()
 
 
-class UserCallback:
-    def __set_name__(self, owner, name):
-        self._name = f"_{name}_callback"
-
-    def __get__(self, obj, objtype=None):
-        return getattr(obj, self._name, None)
-
-    def __set__(self, obj, func):
-        setattr(obj, self._name, func)
-
-
-class MQTTClient(Mosquitto):
-    def __init__(self, *args, logger=None, **kwargs):
+class Client(Mosquitto):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._logger = logger
         self._handlers = {}  # dict[str, func]
         self._set_default_callbacks()
 
-    on_connect = UserCallback()
-    on_disconnect = UserCallback()
-    on_subscribe = UserCallback()
-    on_unsubscribe = UserCallback()
-    on_publish = UserCallback()
-    on_message = UserCallback()
-    on_log = UserCallback()
-
-    def _call(self, func, *args, use_errno=False):
-        if self._logger:
-            self._logger.debug("CALL: %s%s", func.__name__, (self._c_mosq_p,) + args)
-        super()._call(func, *args, use_errno=use_errno)
-
     def _set_default_callbacks(self):
-        self.connect_callback_set(self._on_connect)
-        self.disconnect_callback_set(self._on_disconnect)
-        self.subscribe_callback_set(self._on_subscribe)
-        self.unsubscribe_callback_set(self._on_unsubscribe)
-        self.publish_callback_set(self._on_publish)
-        self.message_callback_set(self._on_message)
-        self.log_callback_set(self._on_log)
-
-    def _on_connect(self, mosq, userdata, rc):
-        if self.on_connect:
-            self.on_connect(self, userdata, ConnackCode(rc))
-
-    def _on_disconnect(self, mosq, userdata, rc):
-        if self.on_disconnect:
-            self.on_disconnect(self, userdata, rc)
-
-    def _on_subscribe(self, mosq, userdata, mid, qos_count, granted_qos):
-        if self.on_subscribe:
-            self.on_subscribe(
-                self,
-                userdata,
-                mid,
-                qos_count,
-                [granted_qos[i] for i in range(qos_count)],
-            )
-
-    def _on_unsubscribe(self, mosq, userdata, mid):
-        if self.on_unsubscribe:
-            self.on_unsubscribe(self, userdata, mid)
-
-    def _on_publish(self, mosq, userdata, mid):
-        if self.on_publish:
-            self.on_publish(self, userdata, mid)
+        super()._set_default_callbacks()
+        self.on_message = self._on_message
 
     def _on_message(self, mosq, userdata, msg):
-        msg = MQTTMessage.from_struct(msg)
         if self._logger:
             self._logger.debug("RECV: %s", msg)
-        if self.on_message:
-            self.on_message(self, userdata, msg)
-        else:
-            for func in self._topic_handlers(msg.topic):
-                try:
-                    func(self, self.userdata, msg)
-                except Exception as e:
-                    self._logger.exception(e)
+        for func in self.topic_handlers(msg.topic):
+            func(self, self.userdata, msg)
 
-    def _topic_handlers(self, topic):
+    def topic_handlers(self, topic):
         for sub, func in self._handlers.items():
             if topic_matches_sub(sub, topic):
                 yield func
-
-    def _on_log(self, mosq, userdata, level, msg):
-        if self.on_log:
-            self.on_log(self, userdata, LogLevel(level), msg.decode())
-        elif self._logger:
-            self._logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
 
     def disconnect(self, strict=True):
         try:

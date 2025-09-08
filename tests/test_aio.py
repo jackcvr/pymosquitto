@@ -4,13 +4,13 @@ import asyncio
 
 import pytest
 
-from pymosquitto.aio import AsyncMQTTClient
+from pymosquitto.aio import AsyncClient
 
 
 @pytest.fixture(scope="session")
 def client_factory(token):
     def _factory():
-        client = AsyncMQTTClient(userdata=SimpleNamespace(), logger=logging.getLogger())
+        client = AsyncClient(userdata=SimpleNamespace(), logger=logging.getLogger())
         client.username_pw_set(token)
         return client
 

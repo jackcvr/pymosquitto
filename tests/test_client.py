@@ -5,14 +5,14 @@ from types import SimpleNamespace
 import pytest
 
 from pymosquitto.bindings import MosquittoError
-from pymosquitto.client import MQTTClient
+from pymosquitto.client import Client
 from pymosquitto import constants as c
 
 
 @pytest.fixture(scope="session")
 def client_factory(token):
     def _factory():
-        client = MQTTClient(userdata=SimpleNamespace(), logger=logging.getLogger())
+        client = Client(userdata=SimpleNamespace(), logger=logging.getLogger())
         client.username_pw_set(token)
         return client
 
@@ -45,12 +45,13 @@ def client(client_factory, host, port):
 
 @pytest.fixture(autouse=True)
 def cleanup(client):
+    prev_on_message = client.on_message
     try:
         yield
     finally:
         client.on_publish = None
         client.on_subscribe = None
-        client.on_message = None
+        client.on_message = prev_on_message
 
 
 def test_on_message(client):
@@ -61,11 +62,11 @@ def test_on_message(client):
     def _on_sub(client, userdata, mid, count, qos):
         userdata.sub_mid = mid
         userdata.sub_count = count
-        userdata.sub_qos = qos
+        userdata.sub_qos = [qos[i] for i in range(count)]
         is_sub.set()
 
-    def _on_message(client, userdata, message):
-        userdata.message = message
+    def _on_message(client, userdata, msg):
+        userdata.msg = msg
         is_recv.set()
 
     is_sub = threading.Event()
@@ -86,7 +87,7 @@ def test_on_message(client):
     assert client.userdata.pub_mid
 
     assert is_recv.wait(1)
-    assert client.userdata.message.payload == b"123"
+    assert client.userdata.msg.payload == b"123"
 
 
 def test_on_topic(client):
@@ -121,18 +122,3 @@ def test_on_topic(client):
 
     client.on_topic(test_topic, None)
     assert client._handlers == {}
-
-
-def test_client_subclass(token, host, port):
-    class MyClient(MQTTClient):
-        def on_connect(self, client, userdata, rc):
-            userdata["rc"] = rc
-            is_connected.set()
-
-    is_connected = threading.Event()
-    client = MyClient(userdata={}, logger=logging.getLogger())
-    client.username_pw_set(token)
-    client.connect(host, port)
-    client.loop_start()
-    assert is_connected.wait(1)
-    assert client.userdata["rc"] == c.ConnackCode.ACCEPTED

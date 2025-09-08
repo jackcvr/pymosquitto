@@ -169,44 +169,44 @@ class MQTTMessageStruct(C.Structure):
     )
 
 
-CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
-    None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int)
-)
-UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-MESSAGE_CALLBACK = C.CFUNCTYPE(
-    None, C.c_void_p, C.py_object, C.POINTER(MQTTMessageStruct)
-)
-LOG_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_char_p)
-
 # void mosquitto_connect_callback_set(struct mosquitto *mosq, void (*on_connect)(struct mosquitto *, void *, int))
+CONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
 libmosq.mosquitto_connect_callback_set.argtypes = (C.c_void_p, CONNECT_CALLBACK)
 libmosq.mosquitto_connect_callback_set.restype = None
 
 # void mosquitto_disconnect_callback_set(struct mosquitto *mosq, void (*on_disconnect)(struct mosquitto *, void *, int))
+DISCONNECT_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
 libmosq.mosquitto_disconnect_callback_set.argtypes = (C.c_void_p, DISCONNECT_CALLBACK)
 libmosq.mosquitto_disconnect_callback_set.restype = None
 
 # void mosquitto_subscribe_callback_set(struct mosquitto *mosq, void (*on_subscribe)(struct mosquitto *, void *, int, int, const int *))
+SUBSCRIBE_CALLBACK = C.CFUNCTYPE(
+    None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int)
+)
 libmosq.mosquitto_subscribe_callback_set.argtypes = (C.c_void_p, SUBSCRIBE_CALLBACK)
 libmosq.mosquitto_subscribe_callback_set.restype = None
 
 # void mosquitto_unsubscribe_callback_set(struct mosquitto *mosq, void (*on_unsubscribe)(struct mosquitto *, void *, int))
+UNSUBSCRIBE_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
 libmosq.mosquitto_unsubscribe_callback_set.argtypes = (C.c_void_p, UNSUBSCRIBE_CALLBACK)
 libmosq.mosquitto_unsubscribe_callback_set.restype = None
 
 # void mosquitto_publish_callback_set(struct mosquitto *mosq, void (*on_publish)(struct mosquitto *, void *, int))
+PUBLISH_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
 libmosq.mosquitto_publish_callback_set.argtypes = (C.c_void_p, PUBLISH_CALLBACK)
 libmosq.mosquitto_publish_callback_set.restype = None
 
 # void mosquitto_message_callback_set(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, const struct mosquitto_message *))
+MESSAGE_CALLBACK = C.CFUNCTYPE(
+    None, C.c_void_p, C.py_object, C.POINTER(MQTTMessageStruct)
+)
 libmosq.mosquitto_message_callback_set.argtypes = (C.c_void_p, MESSAGE_CALLBACK)
 libmosq.mosquitto_message_callback_set.restype = None
 
 # void mosquitto_log_callback_set(struct mosquitto *mosq, void (*on_log)(struct mosquitto *, void *, int, const char *))
+LOG_CALLBACK = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_char_p)
 libmosq.mosquitto_log_callback_set.argtypes = (C.c_void_p, LOG_CALLBACK)
+libmosq.mosquitto_log_callback_set.restype = None
 
 ###
 ### Utility functions
@@ -305,7 +305,7 @@ class MQTTMessage:
     retain: bool
 
     @classmethod
-    def from_struct(cls, msg: MQTTMessageStruct):
+    def from_struct(cls, msg):
         cnt = msg.contents
         return cls(
             cnt.mid,
