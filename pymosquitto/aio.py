@@ -12,6 +12,7 @@ class AsyncClient(Mosquitto):
     def __init__(self, *args, loop=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._loop = loop or asyncio.get_event_loop()
+        self._fd = None
         self._misc_task = None
         self._cond = asyncio.Condition()
         self._conn_rc = None
@@ -61,6 +62,7 @@ class AsyncClient(Mosquitto):
             self._misc_task = None
         self._messages.put_nowait(None)
         self._loop.create_task(self._setattr("_disconn_rc", rc))
+        self._fd = None
 
     def _on_publish(self, mosq, userdata, mid):
         self._resolve_future(self._pub_mids, mid, mid)
@@ -84,15 +86,15 @@ class AsyncClient(Mosquitto):
         async with self._cond:
             self._conn_rc = None
             super().connect(*args, **kwargs)
-            fd = self.socket()
-            if fd:
-                self._loop.add_reader(fd, self._loop_read)
+            self._fd = self.socket()
+            if self._fd:
+                self._loop.add_reader(self._fd, self._loop_read)
             else:
                 raise RuntimeError("No socket")
 
             await self._cond.wait_for(lambda: self._conn_rc is not None)
             if self._conn_rc != ConnackCode.ACCEPTED:
-                self._loop.remove_reader(fd)
+                self._loop.remove_reader(self._fd)
                 raise ConnectionError(connack_string(self._conn_rc))
 
             self._misc_task = self._loop.create_task(self.misc_loop())
@@ -126,11 +128,11 @@ class AsyncClient(Mosquitto):
         await fut
         return mid
 
-    async def recv_messages(self):
+    async def read_messages(self):
         while True:
             msg = await self._messages.get()
             if msg is None:
-                break
+                return
             yield msg
 
     def _loop_read(self):
@@ -142,15 +144,13 @@ class AsyncClient(Mosquitto):
             self._check_writable()
 
     def _check_writable(self):
-        if self.want_write():
-            fd = self.socket()
-            if fd:
+        if self._fd and self.want_write():
 
-                def cb():
-                    self.loop_write()
-                    self._loop.remove_writer(fd)
+            def cb():
+                self.loop_write()
+                self._loop.remove_writer(self._fd)
 
-                self._loop.add_writer(fd, cb)
+            self._loop.add_writer(self._fd, cb)
 
     async def misc_loop(self):
         while True:

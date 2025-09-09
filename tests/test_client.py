@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from pymosquitto.bindings import MosquittoError
-from pymosquitto.client import Client
+from pymosquitto import Client
 from pymosquitto import constants as c
 
 

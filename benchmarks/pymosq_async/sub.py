@@ -18,7 +18,7 @@ async def main():
     async with Client(logger=logger) as client:
         await client.connect(c.HOST, c.PORT)
         await client.subscribe(c.TOPIC, c.QOS)
-        async for _ in client.recv_messages():
+        async for _ in client.read_messages():
             count += 1
             if count == c.LIMIT:
                 print("DONE")

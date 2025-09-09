@@ -48,7 +48,7 @@ async def main():
     async with AsyncMQTTClient() as client:
         await client.connect("localhost", 1883)
         await client.subscribe("#", 1)
-        async for msg in client.recv_messages():
+        async for msg in client.read_messages():
             print(msg)
 
 
@@ -74,13 +74,13 @@ Losers excluded:
 
 ```text
 Module;Time;RSS
-pymosq;0:04.33;18128
-pymosq_async;0:10.34;24868
-paho;0:09.15;23392
-gmqtt;0:03.90;24724
-mqttools;0:06.55;27860
-aiomqtt;0:55.72;576700
-amqtt;1:07.35;725708
+pymosq;0:04.26;18316
+pymosq_async;0:09.36;24852
+paho;0:09.06;23556
+gmqtt;0:04.33;25176
+mqttools;0:06.72;28116
+aiomqtt;0:53.69;578288
+amqtt;1:06.86;736724
 ```
 
 

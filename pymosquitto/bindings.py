@@ -269,15 +269,11 @@ class MosquittoError(Exception):
         return f"{self.func.__name__} failed: {self.code}/{strerror(self.code)}"
 
 
-def call_errno(func, *args):
-    C.set_errno(0)
-    ret = func(*args)
-    return ret, C.get_errno()
-
-
 def call(func, *args, use_errno=False):
     if use_errno:
-        ret, err = call_errno(func, *args)
+        C.set_errno(0)
+        ret = func(*args)
+        err = C.get_errno()
         if err != 0:
             raise OSError(err, os.strerror(err))
         return ret
@@ -286,8 +282,9 @@ def call(func, *args, use_errno=False):
 
 def mosq_call(func, *args, use_errno=False):
     if use_errno:
-        ret, err = call_errno(func, *args)
-        if ret == ErrorCode.ERRNO and err != 0:
+        ret = func(*args)
+        if ret == ErrorCode.ERRNO:
+            err = C.get_errno()
             raise OSError(err, os.strerror(err))
     else:
         ret = func(*args)
