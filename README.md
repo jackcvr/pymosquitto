@@ -22,14 +22,14 @@ A lightweight Python MQTT client implemented as a thin wrapper around libmosquit
 ## Usage
 
 ```python
-from pymosquitto.client import MQTTClient
+from pymosquitto import Client
 
 
 def on_message(client, userdata, msg):
     print(msg)
 
 
-client = MQTTClient()
+client = Client()
 client.on_connect = lambda *_: client.subscribe("#", 1)
 client.on_message = on_message
 client.connect_async("localhost", 1883)
@@ -41,11 +41,11 @@ Async client example:
 ```python
 import asyncio
 
-from pymosquitto.aio import AsyncMQTTClient
+from pymosquitto.aio import AsyncClient
 
 
 async def main():
-    async with AsyncMQTTClient() as client:
+    async with AsyncClient() as client:
         await client.connect("localhost", 1883)
         await client.subscribe("#", 1)
         async for msg in client.read_messages():
