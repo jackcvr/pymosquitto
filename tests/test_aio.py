@@ -30,7 +30,7 @@ async def test_async_adapter(client_factory, host, port):
 
         async def recv():
             messages = []
-            async for msg in client.recv_messages():
+            async for msg in client.read_messages():
                 messages.append(msg)
                 if len(messages) == count:
                     break
