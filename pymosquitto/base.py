@@ -36,11 +36,11 @@ class Callback:
             func = lambda *_: None  # noqa: E731
         self._func = func
         if self._deco is MESSAGE_CALLBACK:
-            self._callback = self._deco(
-                lambda _, userdata, msg: func(
-                    obj, userdata, MQTTMessage.from_struct(msg)
-                )
-            )
+
+            def _adapter(_, userdata, msg):
+                func(obj, userdata, MQTTMessage.from_struct(msg))
+
+            self._callback = self._deco(_adapter)
         else:
             self._callback = self._deco(lambda _, *args: func(obj, *args))
         self._lib_func(obj.c_mosq_p, self._callback)

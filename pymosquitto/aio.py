@@ -21,6 +21,8 @@ class AsyncClient(Mosquitto):
         self._sub_mids = weakref.WeakValueDictionary()
         self._unsub_mids = weakref.WeakValueDictionary()
         self._messages = asyncio.Queue()
+        self._put_msg = self._messages.put_nowait
+        self._get_msg = self._messages.get
 
     async def __aenter__(self):
         return self
@@ -60,9 +62,15 @@ class AsyncClient(Mosquitto):
         if self._misc_task and not self._misc_task.done():
             self._misc_task.cancel()
             self._misc_task = None
-        self._messages.put_nowait(None)
+        self._put_msg(None)
         self._loop.create_task(self._setattr("_disconn_rc", rc))
         self._fd = None
+
+    async def _setattr(self, attr, value):
+        async with self._cond:
+            setattr(self, attr, value)
+            self._cond.notify_all()
+        self._check_writable()
 
     def _on_publish(self, mosq, userdata, mid):
         self._resolve_future(self._pub_mids, mid, mid)
@@ -73,14 +81,14 @@ class AsyncClient(Mosquitto):
     def _on_unsubscribe(self, mosq, userdata, mid):
         self._resolve_future(self._unsub_mids, mid, mid)
 
-    @staticmethod
-    def _resolve_future(mapping, mid, value):
+    def _resolve_future(self, mapping, mid, value):
         fut = mapping.get(mid)
         if fut is not None and not fut.done():
             fut.set_result(value)
+        self._check_writable()
 
     def _on_message(self, mosq, userdata, msg):
-        self._messages.put_nowait(msg)
+        self._put_msg(msg)
 
     async def connect(self, *args, **kwargs):
         async with self._cond:
@@ -130,7 +138,7 @@ class AsyncClient(Mosquitto):
 
     async def read_messages(self):
         while True:
-            msg = await self._messages.get()
+            msg = await self._get_msg()
             if msg is None:
                 return
             yield msg
@@ -140,17 +148,6 @@ class AsyncClient(Mosquitto):
             self.loop_read()
         except BlockingIOError:
             pass
-        finally:
-            self._check_writable()
-
-    def _check_writable(self):
-        if self._fd and self.want_write():
-
-            def cb():
-                self.loop_write()
-                self._loop.remove_writer(self._fd)
-
-            self._loop.add_writer(self._fd, cb)
 
     async def misc_loop(self):
         while True:
@@ -161,7 +158,11 @@ class AsyncClient(Mosquitto):
             except asyncio.CancelledError:
                 break
 
-    async def _setattr(self, attr, value):
-        async with self._cond:
-            setattr(self, attr, value)
-            self._cond.notify_all()
+    def _check_writable(self):
+        if self._fd and self.want_write():
+
+            def _cb():
+                self.loop_write()
+                self._loop.remove_writer(self._fd)
+
+            self._loop.add_writer(self._fd, _cb)
