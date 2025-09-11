@@ -39,12 +39,67 @@ libmosq.mosquitto_destroy.argtypes = (C.c_void_p,)
 libmosq.mosquitto_destroy.restype = None
 
 ###
+### Will
+###
+
+# int mosquitto_will_set(struct mosquitto *mosq, const char *topic, int payloadlen, const void *payload, int qos, bool retain)
+libmosq.mosquitto_will_set.argtypes = (
+    C.c_void_p,
+    C.c_char_p,
+    C.c_int,
+    C.c_void_p,
+    C.c_int,
+    C.c_bool,
+)
+libmosq.mosquitto_will_set.restype = C.c_int
+
+# int mosquitto_will_clear(struct mosquitto *mosq)
+libmosq.mosquitto_will_clear.argtypes = (C.c_void_p,)
+libmosq.mosquitto_will_clear.restype = C.c_int
+
+###
 ### Username and password
 ###
 
 # int mosquitto_username_pw_set(struct mosquitto *mosq, const char *username, const char *password)
 libmosq.mosquitto_username_pw_set.argtypes = (C.c_void_p, C.c_char_p, C.c_char_p)
 libmosq.mosquitto_username_pw_set.restype = C.c_int
+
+###
+### TLS/SSL
+###
+
+# int mosquitto_tls_set(struct mosquitto *mosq, const char *cafile, const char *capath, const char *certfile, const char *keyfile, int (*pw_callback)(char *buf, int size, int rwflag, void *userdata))
+libmosq.mosquitto_tls_set.argtypes = (
+    C.c_void_p,
+    C.c_char_p,
+    C.c_char_p,
+    C.c_char_p,
+    C.c_char_p,
+    C.c_void_p,
+)
+libmosq.mosquitto_tls_set.restype = C.c_int
+
+# int mosquitto_tls_insecure_set(struct mosquitto *mosq, bool value)
+libmosq.mosquitto_tls_insecure_set.argtypes = (C.c_void_p, C.c_bool)
+libmosq.mosquitto_tls_insecure_set.restype = C.c_int
+
+# int mosquitto_tls_opts_set(struct mosquitto *mosq, int cert_reqs, const char *tls_version, const char *ciphers)
+libmosq.mosquitto_tls_opts_set.argtypes = (C.c_void_p, C.c_int, C.c_char_p, C.c_char_p)
+libmosq.mosquitto_tls_opts_set.restype = C.c_int
+
+###
+### PSK
+###
+
+# int mosquitto_tls_psk_set(struct mosquitto *mosq, const char *psk, const char *identity, const char *ciphers)
+libmosq.mosquitto_tls_psk_set.argtypes = (
+    C.c_void_p,
+    C.c_char_p,
+    C.c_char_p,
+    C.c_char_p,
+)
+libmosq.mosquitto_tls_psk_set.restype = C.c_int
 
 ###
 ### Connecting, reconnecting, disconnecting
@@ -216,6 +271,26 @@ libmosq.mosquitto_log_callback_set.restype = None
 libmosq.mosquitto_strerror.argtypes = (C.c_int,)
 libmosq.mosquitto_strerror.restype = C.c_char_p
 
+###
+### Options
+###
+
+# int mosquitto_opts_set(struct mosquitto *mosq, enum mosq_opt_t option, void *value)
+libmosq.mosquitto_opts_set.argtypes = (C.c_void_p, C.c_int, C.c_void_p)
+libmosq.mosquitto_opts_set.restype = C.c_int
+
+# int mosquitto_int_option(struct mosquitto *mosq, enum mosq_opt_t option, int value)
+libmosq.mosquitto_int_option.argtypes = (C.c_void_p, C.c_int, C.c_int)
+libmosq.mosquitto_int_option.restype = C.c_int
+
+# int mosquitto_string_option(struct mosquitto *mosq, enum mosq_opt_t option, const char *value)
+libmosq.mosquitto_string_option.argtypes = (C.c_void_p, C.c_int, C.c_char_p)
+libmosq.mosquitto_string_option.restype = C.c_int
+
+# int mosquitto_void_option(struct mosquitto *mosq, enum mosq_opt_t option, void *value)
+libmosq.mosquitto_void_option.argtypes = (C.c_void_p, C.c_int, C.c_void_p)
+libmosq.mosquitto_void_option.restype = C.c_int
+
 # const char *mosquitto_connack_string(int connack_code)
 libmosq.mosquitto_connack_string.argtypes = (C.c_int,)
 libmosq.mosquitto_connack_string.restype = C.c_char_p
@@ -280,15 +355,12 @@ def call(func, *args, use_errno=False):
     return func(*args)
 
 
-def mosq_call(func, *args, use_errno=False):
-    if use_errno:
-        ret = func(*args)
-        if ret == ErrorCode.ERRNO:
-            err = C.get_errno()
-            raise OSError(err, os.strerror(err))
-    else:
-        ret = func(*args)
-    if func.restype == C.c_int and ret != 0:
+def mosq_call(func, *args):
+    ret = func(*args)
+    if ret == ErrorCode.ERRNO:
+        err = C.get_errno()
+        raise OSError(err, os.strerror(err))
+    if func.restype == C.c_int and ret != ErrorCode.SUCCESS:
         raise MosquittoError(func, ret)
     return ret
 

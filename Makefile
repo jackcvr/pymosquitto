@@ -35,9 +35,9 @@ bench-all:
 		&& echo "Module;Time;RSS" > benchmark.csv
 	@for module in pymosq pymosq_async paho gmqtt mqttools aiomqtt amqtt; do \
 		LINE=$$($(MAKE) -s bench-$$module); \
-		echo "$$LINE"; \
 		echo "$$LINE" >>benchmark.csv; \
 	done
+	@cat benchmark.csv
 
 bench-%:
 	@$(MAKE) -s build $(DISCARD)

@@ -74,13 +74,13 @@ Losers excluded:
 
 ```text
 Module;Time;RSS
-pymosq;0:04.26;18316
-pymosq_async;0:09.36;24852
-paho;0:09.06;23556
-gmqtt;0:04.33;25176
-mqttools;0:06.72;28116
-aiomqtt;0:53.69;578288
-amqtt;1:06.86;736724
+pymosq;0:04.23;18552
+pymosq_async;0:09.39;25004
+paho;0:08.84;23544
+gmqtt;0:03.97;24780
+mqttools;0:06.49;27944
+aiomqtt;0:53.48;578296
+amqtt;1:02.94;756716
 ```
 
 

@@ -13,7 +13,7 @@ from pymosquitto import constants as c
 def client_factory(token):
     def _factory():
         client = Client(userdata=SimpleNamespace(), logger=logging.getLogger())
-        client.username_pw_set(token)
+        client.username_pw_set(token, "")
         return client
 
     return _factory
@@ -96,13 +96,13 @@ def test_on_topic(client):
     def _on_sub(client, userdata, mid, count, qos):
         is_sub.set()
 
-    def _on_topic(client, userdata, message):
-        with is_recv:
-            messages.append(message)
-            is_recv.notify_all()
+    def _on_topic(client, userdata, msg):
+        messages.append(msg)
+        if len(messages) == 2:
+            is_recv.set()
 
     is_sub = threading.Event()
-    is_recv = threading.Condition()
+    is_recv = threading.Event()
     messages = []
     client.on_subscribe = _on_sub
     client.on_topic(test_topic, _on_topic)
@@ -115,9 +115,7 @@ def test_on_topic(client):
     client.publish("test/1/one", "111", qos=1)
     client.publish("test/2/me", "222", qos=1)
 
-    with is_recv:
-        if not is_recv.wait_for(lambda: len(messages) == 2, timeout=1):
-            raise TimeoutError
+    assert is_recv.wait(1)
     assert {m.payload for m in messages} == {b"111", b"222"}
 
     client.on_topic(test_topic, None)

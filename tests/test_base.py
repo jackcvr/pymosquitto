@@ -13,7 +13,7 @@ from pymosquitto import constants as c
 def client_factory(token):
     def _factory():
         client = Mosquitto(userdata=SimpleNamespace())
-        client.username_pw_set(token)
+        client.username_pw_set(token, "")
         return client
 
     return _factory

@@ -51,7 +51,9 @@ class Client(Mosquitto):
         @HANDLER_FUNC
         def _stop(signum):
             if self._logger:
-                self._logger.debug("Caught signal: %s", signal.Signals(signum).name)
+                self._logger.debug(
+                    "Caught signal: %d/%s", signum, signal.Signals(signum).name
+                )
             self.disconnect(strict=False)
 
         for sig in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
@@ -68,8 +70,9 @@ class Client(Mosquitto):
 
             return decorator
 
-        if func is not None:
+        if func is None:
+            if topic in self._handlers:
+                del self._handlers[topic]
+        else:
             self._handlers[topic] = func
-        elif topic in self._handlers:
-            del self._handlers[topic]
         return None

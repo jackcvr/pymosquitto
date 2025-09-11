@@ -14,9 +14,8 @@ class AsyncClient(Mosquitto):
         self._loop = loop or asyncio.get_event_loop()
         self._fd = None
         self._misc_task = None
-        self._cond = asyncio.Condition()
-        self._conn_rc = None
-        self._disconn_rc = None
+        self._conn_future = None
+        self._disconn_future = None
         self._pub_mids = weakref.WeakValueDictionary()
         self._sub_mids = weakref.WeakValueDictionary()
         self._unsub_mids = weakref.WeakValueDictionary()
@@ -52,7 +51,7 @@ class AsyncClient(Mosquitto):
         self.on_message = self._on_message
 
     def _on_connect(self, mosq, userdata, rc):
-        self._loop.create_task(self._setattr("_conn_rc", rc))
+        self._conn_future.set_result(rc)
 
     def _on_disconnect(self, mosq, userdata, rc):
         fd = self.socket()
@@ -63,14 +62,8 @@ class AsyncClient(Mosquitto):
             self._misc_task.cancel()
             self._misc_task = None
         self._put_msg(None)
-        self._loop.create_task(self._setattr("_disconn_rc", rc))
+        self._disconn_future.set_result(rc)
         self._fd = None
-
-    async def _setattr(self, attr, value):
-        async with self._cond:
-            setattr(self, attr, value)
-            self._cond.notify_all()
-        self._check_writable()
 
     def _on_publish(self, mosq, userdata, mid):
         self._resolve_future(self._pub_mids, mid, mid)
@@ -91,29 +84,35 @@ class AsyncClient(Mosquitto):
         self._put_msg(msg)
 
     async def connect(self, *args, **kwargs):
-        async with self._cond:
-            self._conn_rc = None
-            super().connect(*args, **kwargs)
-            self._fd = self.socket()
-            if self._fd:
-                self._loop.add_reader(self._fd, self._loop_read)
-            else:
-                raise RuntimeError("No socket")
+        if self._conn_future:
+            return await self._conn_future
 
-            await self._cond.wait_for(lambda: self._conn_rc is not None)
-            if self._conn_rc != ConnackCode.ACCEPTED:
-                self._loop.remove_reader(self._fd)
-                raise ConnectionError(connack_string(self._conn_rc))
+        self._conn_future = self._loop.create_future()
+        super().connect(*args, **kwargs)
+        self._fd = self.socket()
+        if self._fd:
+            self._loop.add_reader(self._fd, self._loop_read)
+        else:
+            raise RuntimeError("No socket")
 
-            self._misc_task = self._loop.create_task(self.misc_loop())
-            return self._conn_rc
+        rc = await self._conn_future
+        self._conn_future = None
+        if rc != ConnackCode.ACCEPTED:
+            self._loop.remove_reader(self._fd)
+            raise ConnectionError(connack_string(rc))
+
+        self._misc_task = self._loop.create_task(self._misc_loop())
+        return rc
 
     async def disconnect(self):
-        async with self._cond:
-            self._disconn_rc = None
-            super().disconnect()
-            await self._cond.wait_for(lambda: self._disconn_rc is not None)
-            return self._disconn_rc
+        if self._disconn_future:
+            return await self._disconn_future
+
+        self._disconn_future = self._loop.create_future()
+        super().disconnect()
+        rc = await self._disconn_future
+        self._disconn_future = None
+        return rc
 
     async def publish(self, *args, **kwargs):
         mid = super().publish(*args, **kwargs)
@@ -145,11 +144,11 @@ class AsyncClient(Mosquitto):
 
     def _loop_read(self):
         try:
-            self.loop_read()
+            self.loop_read(1)
         except BlockingIOError:
             pass
 
-    async def misc_loop(self):
+    async def _misc_loop(self):
         while True:
             try:
                 self._check_writable()
