@@ -55,7 +55,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Check out more examples in `tests/test_client.py`.
+Check out more examples in `tests` directory.
 
 
 ## Benchmarks
