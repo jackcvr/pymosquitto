@@ -1,4 +1,4 @@
-from pymosquitto.client import Client
+from pymosquitto import Client
 
 from benchmarks import config as c
 

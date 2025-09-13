@@ -23,6 +23,9 @@ _libmosq_inited = False
 class Callback:
     def __init__(self, deco):
         self._deco = deco
+        self._lib_func = None
+        self._func = None
+        self._callback = None
 
     def __set_name__(self, owner, name):
         if not name.startswith("on_"):
@@ -48,6 +51,9 @@ class Callback:
 
 
 class Function:
+    def __init__(self):
+        self._lib_func = None
+
     def __set_name__(self, owner, name):
         self._lib_func = getattr(libmosq, f"mosquitto_{name}")
 

@@ -1,5 +1,4 @@
 import paho.mqtt.client as mqtt
-
 from benchmarks import config as c
 
 
