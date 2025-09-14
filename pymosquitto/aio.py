@@ -121,18 +121,17 @@ class BaseAsyncClient(abc.ABC):
 
 
 class AsyncClient(BaseAsyncClient):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, buffer_size=2000, flush_interval=0.05, **kwargs):
         super().__init__(*args, **kwargs)
-        self._msg_buffer = deque()
+        self._buffer_size = buffer_size
+        self._flush_interval = flush_interval
+        self._buffer = deque()
+        self._buffer_full = asyncio.Event()
         self._flush_task = None
 
     async def __aenter__(self):
         self._mosq.loop_start()
         return await super().__aenter__()
-
-    async def __aexit__(self, *args):
-        await super().__aexit__(*args)
-        self._mosq.loop_stop(True)
 
     def _on_connect(self, mosq, userdata, rc):
         self._loop.call_soon_threadsafe(super()._on_connect, mosq, userdata, rc)
@@ -159,19 +158,23 @@ class AsyncClient(BaseAsyncClient):
         self._loop.call_soon_threadsafe(super()._on_unsubscribe, mosq, userdata, mid)
 
     def _on_message(self, mosq, userdata, msg):
-        self._msg_buffer.append(msg)
+        self._buffer.append(msg)
+        if len(self._buffer) >= self._buffer_size:
+            self._loop.call_soon_threadsafe(self._buffer_full.set)
 
     async def _flush_messages(self):
         try:
             while True:
-                sleep_time = 0.01
-                while len(self._msg_buffer) == 0:
-                    await asyncio.sleep(sleep_time)
-                    if sleep_time < 0.05:
-                        sleep_time += 0.01
-                while self._msg_buffer:
-                    msg = self._msg_buffer.popleft()
+                while self._buffer:
+                    msg = self._buffer.popleft()
                     self._put_msg(msg)
+                # either wait for the buffer to fill up or timeout after flush_interval
+                task = self._loop.create_task(self._buffer_full.wait())
+                done, pending = await asyncio.wait({task}, timeout=self._flush_interval)
+                if done:
+                    self._buffer_full.clear()
+                else:
+                    task.cancel()
         except asyncio.CancelledError:
             pass
 

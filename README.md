@@ -5,7 +5,7 @@ A lightweight Python MQTT client implemented as a thin wrapper around libmosquit
 It provides an efficient synchronous client (`client.Client`) and two variants of asynchronous clients:
 
 - `aio.AsyncClient` - async interface to libmosquitto loop running in its own thread.
-It's a little bit faster, hopefully more reliable, but consumes a little bit more memory.
+It's a little bit faster, supposedly more reliable, but consumes a little bit more memory.
 - `aio.TrueAsyncClient` - manages all events in asyncio loop by utilizing `mosquitto_loop_read, mosquitto_loop_write, mosquitto_loop_misc` functions.
 
 
@@ -80,14 +80,14 @@ Losers excluded:
 
 ```text
 Module;Time;RSS
-pymosq;0:04.66;18484
-pymosq_async;0:07.26;25488
-pymosq_true_async;0:08.93;25080
-paho;0:08.67;23388
-gmqtt;0:04.94;25212
-mqttools;0:06.14;27900
-aiomqtt;0:53.49;577700
-amqtt;0:00.19;24004
+pymosq;0:04.20;18144
+pymosq_async;0:07.36;25604
+pymosq_true_async;0:10.01;24896
+paho;0:08.94;23472
+gmqtt;0:04.40;24768
+mqttools;0:06.20;27664
+aiomqtt;0:54.12;577624
+amqtt;1:04.37;745276
 ```
 
 
