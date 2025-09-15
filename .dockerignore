@@ -2,3 +2,4 @@
 !pymosquitto/**
 !pyproject.toml
 !setup.py
+!README.md

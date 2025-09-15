@@ -7,10 +7,6 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y libmosquitto1 time
 
-COPY pyproject.toml .
+ADD . ./
 
-RUN pip install .[dev]
-
-COPY . .
-
-RUN pip install -e .
+RUN pip install -e .[dev]

@@ -27,7 +27,7 @@ class BaseAsyncClient(abc.ABC):
 
     async def __aexit__(self, *_):
         try:
-            self._mosq.disconnect()
+            await self.disconnect()
         except MosquittoError as e:
             if e.code != ErrorCode.NO_CONN:
                 raise e from None
