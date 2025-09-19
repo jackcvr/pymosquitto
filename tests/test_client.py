@@ -1,18 +1,18 @@
-import logging
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
 
+from pymosquitto.client import Client
 from pymosquitto.bindings import MosquittoError
-from pymosquitto import Client
 from pymosquitto import constants as c
 
 
 @pytest.fixture(scope="session")
 def client_factory(token):
-    def _factory():
-        client = Client(userdata=SimpleNamespace(), logger=logging.getLogger())
+    def _factory(**kwargs):
+        client = Client(**kwargs)
         client.username_pw_set(token, "")
         return client
 
@@ -26,7 +26,7 @@ def client(client_factory, host, port):
             raise RuntimeError(f"Client connection error: {rc.value}/{rc.name}")
         is_connected.set()
 
-    client = client_factory()
+    client = client_factory(userdata=SimpleNamespace())
     is_connected = threading.Event()
     client.on_connect = _on_connect
     client.connect(host, port)
@@ -43,15 +43,40 @@ def client(client_factory, host, port):
                 raise e
 
 
-@pytest.fixture(autouse=True)
-def cleanup(client):
-    prev_on_message = client.on_message
-    try:
-        yield
-    finally:
-        client.on_publish = None
-        client.on_subscribe = None
-        client.on_message = prev_on_message
+def test_del():
+    is_del = False
+
+    class MyClient(Client):
+        def __del__(self):
+            super().__del__()
+            nonlocal is_del
+            is_del = True
+
+    client = MyClient()
+    assert not is_del
+    del client
+    assert is_del
+
+
+def test_userdata(client):
+    data = client.userdata()
+    client.user_data_set(None)
+    assert client.userdata() is None
+    client.user_data_set(data)
+    assert client.userdata() is data
+
+
+def test_unset_callbacks(client):
+    def _on_message(client, userdata, message):
+        is_recv.set()
+
+    is_recv = threading.Event()
+    client.on_publish = None
+    client.on_message = _on_message
+    client.subscribe("test", 1)
+    client.publish("test", "123", qos=1)
+    assert is_recv.wait(1)
+    time.sleep(0.1)
 
 
 def test_on_message(client):
@@ -75,48 +100,17 @@ def test_on_message(client):
     client.on_publish = _on_pub
     client.on_subscribe = _on_sub
     client.on_message = _on_message
-    client.subscribe("test", qos=1)
+    client.subscribe("test", 1)
 
     assert is_sub.wait(1)
-    assert client.userdata.sub_mid
-    assert client.userdata.sub_count == 1
-    assert client.userdata.sub_qos == [1]
+    udata = client.userdata()
+    assert udata.sub_mid
+    assert udata.sub_count == 1
+    assert udata.sub_qos == [1]
 
     client.publish("test", "123", qos=1)
     assert is_pub.wait(1)
-    assert client.userdata.pub_mid
+    assert udata.pub_mid
 
     assert is_recv.wait(1)
-    assert client.userdata.msg.payload == b"123"
-
-
-def test_on_topic(client):
-    test_topic = "test/+/+"
-
-    def _on_sub(client, userdata, mid, count, qos):
-        is_sub.set()
-
-    def _on_topic(client, userdata, msg):
-        messages.append(msg)
-        if len(messages) == 2:
-            is_recv.set()
-
-    is_sub = threading.Event()
-    is_recv = threading.Event()
-    messages = []
-    client.on_subscribe = _on_sub
-    client.on_topic(test_topic, _on_topic)
-    assert client._handlers == {test_topic: _on_topic}
-
-    client.subscribe("test/#", qos=1)
-    assert is_sub.wait(1)
-
-    client.publish("test/3", "333", qos=1)
-    client.publish("test/1/one", "111", qos=1)
-    client.publish("test/2/me", "222", qos=1)
-
-    assert is_recv.wait(1)
-    assert {m.payload for m in messages} == {b"111", b"222"}
-
-    client.on_topic(test_topic, None)
-    assert client._handlers == {}
+    assert udata.msg.payload == b"123"

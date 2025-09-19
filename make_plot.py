@@ -1,9 +1,10 @@
 import csv
+import sys
 from datetime import datetime
 
 import matplotlib.pyplot as plt
 
-PYTHON_RSS = 10200
+PYTHON_RSS = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 
 LOSERS = {"aiomqtt", "amqtt"}
 

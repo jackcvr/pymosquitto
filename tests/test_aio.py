@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 import logging
 import asyncio
 
@@ -13,7 +12,7 @@ CLIENT_CLASSES = [AsyncClient, TrueAsyncClient]
 @pytest.fixture(scope="session")
 def client_factory(token):
     def _factory(cls):
-        client = cls(userdata=SimpleNamespace(), logger=logging.getLogger())
+        client = cls(logger=logging.getLogger())
         client.mosq.username_pw_set(token, "")
         return client
 

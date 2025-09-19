@@ -27,12 +27,10 @@ test:
 	$(DC_RUN) py $(PYTEST)
 
 test-%:
-	$(DC_RUN) py $(PYTEST) -k $*
+	$(DC_RUN) py $(PYTEST) $(wildcard tests/$* tests/test_$**.py)
 
 bench-all:
-	@PY_RSS=$$($(DC_RUN) py 2>&1 | grep "Maximum resident set size" | $(SED_VALUE)) \
-		&& echo "Python RSS: $$PY_RSS" \
-		&& echo "Module;Time;RSS" > benchmark.csv
+	@echo "Module;Time;RSS" > benchmark.csv
 	@for module in pymosq pymosq_async pymosq_true_async paho gmqtt mqttools aiomqtt amqtt; do \
 		LINE=$$($(MAKE) -s bench-$$module); \
 		echo "$$LINE"; \
@@ -49,7 +47,9 @@ bench-%:
 		&& echo "$$MODULE;$$TIME;$$RSS" || echo "$$MODULE;0;0"
 
 plot:
-	$(PYTHON) ./make_plot.py
+	PY_RSS=$$($(DC_RUN) py 2>&1 | grep "Maximum resident set size" | $(SED_VALUE)) \
+		&& echo "Python RSS: $$PY_RSS" \
+		&& $(PYTHON) ./make_plot.py $$PY_RSS
 
 pack: dist
 

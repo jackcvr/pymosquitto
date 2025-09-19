@@ -1,9 +1,9 @@
 Module;Time;RSS
-pymosq;0:04.20;18144
-pymosq_async;0:07.36;25604
-pymosq_true_async;0:10.01;24896
-paho;0:08.94;23472
-gmqtt;0:04.40;24768
-mqttools;0:06.20;27664
-aiomqtt;0:54.12;577624
-amqtt;1:04.37;745276
+pymosq;0:03.97;18656
+pymosq_async;0:07.47;25180
+pymosq_true_async;0:09.50;24796
+paho;0:08.54;23152
+gmqtt;0:03.94;24620
+mqttools;0:06.44;28316
+aiomqtt;0:52.90;577872
+amqtt;0:59.54;746464

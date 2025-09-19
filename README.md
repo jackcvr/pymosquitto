@@ -4,9 +4,8 @@ A lightweight Python MQTT client implemented as a thin wrapper around libmosquit
 
 It provides an efficient synchronous client (`client.Client`) and two variants of asynchronous clients:
 
-- `aio.AsyncClient` - async interface to libmosquitto loop running in its own thread.
-It's a little bit faster, supposedly more reliable, but consumes a little bit more memory.
-- `aio.TrueAsyncClient` - manages all events in asyncio loop by utilizing `mosquitto_loop_read, mosquitto_loop_write, mosquitto_loop_misc` functions.
+- `aio.AsyncClient` - async interface to libmosquitto loop running in its own thread. It's faster, but consumes a little bit more memory.
+- `aio.TrueAsyncClient` - manages all events in asyncio loop by utilizing `mosquitto_loop_{read,write,misc}` functions.
 
 
 ## Dependencies
@@ -68,7 +67,7 @@ Check out more examples in `tests` directory.
 
 Receiving one million messages with QoS 0.
 
-*The memory plots exclude the Python interpreter overhead (~10.2 MB).
+*The memory plots exclude the Python interpreter overhead (~8.7 MB).
 
 ![benchmark-results](./results.png)
 
@@ -80,14 +79,14 @@ Losers excluded:
 
 ```text
 Module;Time;RSS
-pymosq;0:04.20;18144
-pymosq_async;0:07.36;25604
-pymosq_true_async;0:10.01;24896
-paho;0:08.94;23472
-gmqtt;0:04.40;24768
-mqttools;0:06.20;27664
-aiomqtt;0:54.12;577624
-amqtt;1:04.37;745276
+pymosq;0:04.30;18452
+pymosq_async;0:07.29;25068
+pymosq_true_async;0:09.73;24940
+paho;0:08.97;22860
+gmqtt;0:04.56;24508
+mqttools;0:06.13;28084
+aiomqtt;0:54.05;578104
+amqtt;0:59.41;715416
 ```
 
 
