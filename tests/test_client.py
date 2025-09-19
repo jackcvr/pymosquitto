@@ -4,8 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pymosquitto.client import Client
-from pymosquitto.bindings import MosquittoError
+from pymosquitto.client import Client, LibMosqError
 from pymosquitto import constants as c
 
 
@@ -38,7 +37,7 @@ def client(client_factory, host, port):
     finally:
         try:
             client.disconnect()
-        except MosquittoError as e:
+        except LibMosqError as e:
             if e.code != c.ErrorCode.NO_CONN:
                 raise e
 

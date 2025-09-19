@@ -3,8 +3,8 @@ import weakref
 from collections import deque
 import abc
 
-from pymosquitto.bindings import MosquittoError, connack_string
-from pymosquitto.client import Client
+from pymosquitto.bindings import connack_string
+from pymosquitto.client import Client, LibMosqError
 from pymosquitto.constants import ConnackCode, ErrorCode
 
 
@@ -28,7 +28,7 @@ class BaseAsyncClient(abc.ABC):
     async def __aexit__(self, *_):
         try:
             await self.disconnect()
-        except MosquittoError as e:
+        except LibMosqError as e:
             if e.code != ErrorCode.NO_CONN:
                 raise e from None
 

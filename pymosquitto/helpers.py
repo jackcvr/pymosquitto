@@ -3,6 +3,8 @@ import typing as t
 
 from .bindings import call, libmosq, bind
 
+SIGNAL_WRAPPER = C.CFUNCTYPE(None, C.c_int)
+
 libc = None
 _signal_handlers: dict[int, t.Any] = {}
 
@@ -43,11 +45,11 @@ class Router:
         return decorator
 
 
-def csignal(signum: int, func: t.Callable) -> None:
+# this function might be helpful if you call `run_forever` in the main thread
+def csignal(signum: int, func: t.Callable) -> t.Callable:
     global libc
 
     libc = libc or C.CDLL(None)
-    SIGNAL_WRAPPER = C.CFUNCTYPE(None, C.c_int)
     libsignal = bind(SIGNAL_WRAPPER, libc.signal, C.c_int, SIGNAL_WRAPPER)
 
     func = SIGNAL_WRAPPER(func)

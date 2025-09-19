@@ -3,8 +3,8 @@ import atexit
 from dataclasses import dataclass
 import typing as t
 
-from .constants import LogLevel, LIBMOSQ_MIN_MAJOR_VERSION
-from .bindings import bind, call, libmosq
+from .constants import LogLevel, LIBMOSQ_MIN_MAJOR_VERSION, ErrorCode
+from .bindings import bind, call, libmosq, strerror
 
 __version = (C.c_int(), C.c_int(), C.c_int())
 libmosq.mosquitto_lib_version(
@@ -20,6 +20,14 @@ if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
 
 libmosq.mosquitto_lib_init()
 atexit.register(libmosq.mosquitto_lib_cleanup)
+
+
+class LibMosqError(Exception):
+    def __init__(self, code):
+        self.code = ErrorCode(code)
+
+    def __str__(self):
+        return f"libmosquitto error: {self.code.value}/{self.code.name}/{strerror(self.code)}"
 
 
 class MQTTMessageStruct(C.Structure):
@@ -130,10 +138,13 @@ class Client:
         self.user_data_set(None)
         self.destroy()
 
-    def call(self, func, *args, **kwargs):
+    def call(self, func, *args, is_mosq=True, **kwargs):
         if self._logger:
             self._logger.debug("CALL: %s%s", func.__name__, (self._mosq_ptr,) + args)
-        return call(func, self._mosq_ptr, *args, **kwargs)
+        ret = call(func, self._mosq_ptr, *args, **kwargs)
+        if is_mosq and func.restype == C.c_int and ret != ErrorCode.SUCCESS:
+            raise LibMosqError(ret)
+        return ret
 
     def _set_default_callbacks(self):
         if self._logger:

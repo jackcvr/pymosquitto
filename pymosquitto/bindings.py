@@ -1,7 +1,7 @@
 import ctypes as C
 import os
 
-from .constants import LIBMOSQ_PATH, ErrorCode
+from .constants import LIBMOSQ_PATH
 
 libmosq = C.CDLL(LIBMOSQ_PATH, use_errno=True)
 
@@ -89,26 +89,11 @@ bind(
 )
 
 
-class MosquittoError(Exception):
-    def __init__(self, func, code):
-        self.func = func
-        self.code = ErrorCode(code)
-
-    def __str__(self):
-        return f"{self.func.__name__} failed: {self.code}/{strerror(self.code)}"
-
-
-def call(func, *args, is_mosq=False, use_errno=False):
+def call(func, *args, use_errno=False):
     if use_errno:
         C.set_errno(0)
     ret = func(*args)
-    if is_mosq:
-        if ret == ErrorCode.ERRNO:
-            err = C.get_errno()
-            raise OSError(err, os.strerror(err))
-        if func.restype == C.c_int and ret != ErrorCode.SUCCESS:
-            raise MosquittoError(func, ret)
-    elif use_errno:
+    if use_errno:
         err = C.get_errno()
         if err != 0:
             raise OSError(err, os.strerror(err))
