@@ -99,10 +99,18 @@ class Callback:
         self._callback = callback
         if self._func.__name__ == libmosq.mosquitto_message_callback_set.__name__:
 
-            def adapter(_, userdata, msg):
+            def _message_cb_adapter(_, userdata, msg):
                 callback(obj, userdata, MQTTMessage.from_struct(msg))
 
-            self._wrapped_callback = self._wrapper(adapter)
+            self._wrapped_callback = self._wrapper(_message_cb_adapter)
+        elif self._func.__name__ == libmosq.mosquitto_subscribe_callback_set.__name__:
+
+            def _subscribe_cb_adapter(_, userdata, mid, count, granted_qos):
+                callback(
+                    obj, userdata, mid, count, [granted_qos[i] for i in range(count)]
+                )
+
+            self._wrapped_callback = self._wrapper(_subscribe_cb_adapter)
         elif self._callback:
             self._wrapped_callback = self._wrapper(
                 lambda _, *args: self._callback(obj, *args)

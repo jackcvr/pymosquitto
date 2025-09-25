@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymosquitto"
@@ -9,21 +9,6 @@ description = "A lightweight Python MQTT client implemented as a thin wrapper ar
 requires-python = ">=3.8"
 readme = "README.md"
 license = "MIT"
-
-[project.optional-dependencies]
-dev = [
-    "py-spy",
-    "pytest",
-    "pytest-asyncio",
-    "build",
-    "twine",
-    "matplotlib",
-    "paho-mqtt",
-    "aiomqtt",
-    "amqtt",
-    "gmqtt",
-    "mqttools",
-]
 
 [tool.black]
 target-version = ["py313"]

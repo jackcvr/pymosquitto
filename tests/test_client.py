@@ -83,10 +83,10 @@ def test_on_message(client):
         userdata.pub_mid = mid
         is_pub.set()
 
-    def _on_sub(client, userdata, mid, count, qos):
+    def _on_sub(client, userdata, mid, count, granted_qos):
         userdata.sub_mid = mid
         userdata.sub_count = count
-        userdata.sub_qos = [qos[i] for i in range(count)]
+        userdata.sub_granted_qos = granted_qos
         is_sub.set()
 
     def _on_message(client, userdata, msg):
@@ -105,7 +105,7 @@ def test_on_message(client):
     udata = client.userdata()
     assert udata.sub_mid
     assert udata.sub_count == 1
-    assert udata.sub_qos == [1]
+    assert udata.sub_granted_qos == [1]
 
     client.publish("test", "123", qos=1)
     assert is_pub.wait(1)
