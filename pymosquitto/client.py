@@ -2,9 +2,27 @@ import ctypes as C
 import atexit
 from dataclasses import dataclass
 import typing as t
+import weakref
+import types
 
-from .constants import LogLevel, LIBMOSQ_MIN_MAJOR_VERSION, ErrorCode
-from .bindings import bind, call, libmosq, strerror
+from .constants import LogLevel, LIBMOSQ_MIN_MAJOR_VERSION, ErrorCode, ConnackCode
+from .bindings import bind, call, libmosq, strerror, MQTTMessageStruct
+from .bindings import (
+    ON_CONNECT,
+    ON_CONNECT_WITH_FLAGS,
+    ON_CONNECT_V5,
+    ON_DISCONNECT,
+    ON_DISCONNECT_V5,
+    ON_LOG,
+    ON_UNSUBSCRIBE_V5,
+    ON_UNSUBSCRIBE,
+    ON_SUBSCRIBE_V5,
+    ON_SUBSCRIBE,
+    ON_MESSAGE,
+    ON_PUBLISH_V5,
+    ON_PUBLISH,
+    ON_MESSAGE_V5,
+)
 
 __version = (C.c_int(), C.c_int(), C.c_int())
 libmosq.mosquitto_lib_version(
@@ -18,7 +36,8 @@ del __version
 if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
     raise RuntimeError(f"libmosquitto version {LIBMOSQ_MIN_MAJOR_VERSION}+ is required")
 
-libmosq.mosquitto_lib_init()
+if libmosq.mosquitto_lib_init() != 0:
+    raise RuntimeError("libmosquitto initialization failed")
 atexit.register(libmosq.mosquitto_lib_cleanup)
 
 
@@ -28,17 +47,6 @@ class LibMosqError(Exception):
 
     def __str__(self):
         return f"libmosquitto error: {self.code.value}/{self.code.name}/{strerror(self.code)}"
-
-
-class MQTTMessageStruct(C.Structure):
-    _fields_ = (
-        ("mid", C.c_int),
-        ("topic", C.c_char_p),
-        ("payload", C.c_void_p),
-        ("payloadlen", C.c_int),
-        ("qos", C.c_int),
-        ("retain", C.c_bool),
-    )
 
 
 if t.TYPE_CHECKING:
@@ -76,51 +84,146 @@ class Method:
         )
         self._is_mosq = is_mosq
 
-    @property
-    def func(self):
-        return self._func
-
     def __get__(self, obj, objtype=None):
-        self._obj = obj
-        return self
+        method_name = self._func.__name__
 
-    def __call__(self, *args):
-        return self._obj.call(self._func, *args, is_mosq=self._is_mosq)
+        if not hasattr(obj, method_name):
+            _obj = weakref.proxy(obj)
+            func = self._func
+            is_mosq = self._is_mosq
+
+            def method(self_, *args):
+                return self_.call(func, *args, is_mosq=is_mosq)
+
+            setattr(obj, method_name, types.MethodType(method, _obj))
+
+        return getattr(obj, method_name)
 
 
 class Callback:
-    def __init__(self, func, wrapper):
-        self._func = bind(None, func, C.c_void_p, wrapper)
+    def __init__(self, setter, decorator, wrapper):
+        self._setter = bind(None, setter, C.c_void_p, decorator)
+        self._decorator = decorator
         self._wrapper = wrapper
-        self._callback = None
         self._wrapped_callback = None
 
+    def __set_name__(self, owner, name):
+        self._attr_name = f"__{name[3:]}_callback"
+
     def __set__(self, obj, callback):
-        self._callback = callback
-        if self._func.__name__ == libmosq.mosquitto_message_callback_set.__name__:
-
-            def _message_cb_adapter(_, userdata, msg):
-                callback(obj, userdata, MQTTMessage.from_struct(msg))
-
-            self._wrapped_callback = self._wrapper(_message_cb_adapter)
-        elif self._func.__name__ == libmosq.mosquitto_subscribe_callback_set.__name__:
-
-            def _subscribe_cb_adapter(_, userdata, mid, count, granted_qos):
-                callback(
-                    obj, userdata, mid, count, [granted_qos[i] for i in range(count)]
-                )
-
-            self._wrapped_callback = self._wrapper(_subscribe_cb_adapter)
-        elif self._callback:
-            self._wrapped_callback = self._wrapper(
-                lambda _, *args: self._callback(obj, *args)
-            )
-        else:
-            self._wrapped_callback = self._wrapper(self._callback or 0)
-        obj.call(self._func, self._wrapped_callback)
+        setattr(obj, self._attr_name, callback)
+        if callback and not self._wrapped_callback:
+            self._wrapped_callback = self._decorator(self._wrapper)
+        elif not callback:
+            self._wrapped_callback = self._decorator(0)
+        self._setter(obj.mosq_ptr, self._wrapped_callback)
 
     def __get__(self, obj, objtype=None):
-        return self._callback
+        return getattr(obj, self._attr_name)
+
+
+def _connect_callback_wrapper(mosq, userdata, rc):
+    client = clients.get(mosq, None)
+    if client and client.on_connect:
+        client.on_connect(client, client.userdata(), ConnackCode(rc))
+
+
+def _connect_with_flags_callback_wrapper(mosq, userdata, rc, flags):
+    client = clients.get(mosq, None)
+    if client and client.on_connect_with_flags:
+        client.on_connect_with_flags(client, client.userdata(), ConnackCode(rc), flags)
+
+
+def _connect_v5_callback_wrapper(mosq, userdata, rc, flags, props):
+    client = clients.get(mosq, None)
+    if client and client.on_connect_v5:
+        client.on_connect_v5(client, client.userdata(), ConnackCode(rc), flags, props)
+
+
+def _disconnect_callback_wrapper(mosq, userdata, rc):
+    client = clients.get(mosq, None)
+    if client and client.on_disconnect:
+        client.on_disconnect(client, client.userdata(), ConnackCode(rc))
+
+
+def _disconnect_v5_callback_wrapper(mosq, userdata, rc, props):
+    client = clients.get(mosq, None)
+    if client and client.on_disconnect_v5:
+        client.on_disconnect_v5(client, client.userdata(), ConnackCode(rc), props)
+
+
+def _publish_callback_wrapper(mosq, userdata, mid):
+    client = clients.get(mosq, None)
+    if client and client.on_publish:
+        client.on_publish(client, client.userdata(), mid)
+
+
+def _publish_v5_callback_wrapper(mosq, userdata, mid, props):
+    client = clients.get(mosq, None)
+    if client and client.on_publish_v5:
+        client.on_publish_v5(client, client.userdata(), mid, props)
+
+
+def _message_callback_wrapper(mosq, userdata, msg):
+    client = clients.get(mosq, None)
+    if client and client.on_message:
+        client.on_message(client, client.userdata(), MQTTMessage.from_struct(msg))
+
+
+def _message_v5_callback_wrapper(mosq, userdata, msg, props):
+    client = clients.get(mosq, None)
+    if client and client.on_message_v5:
+        client.on_message_v5(
+            client, client.userdata(), MQTTMessage.from_struct(msg), props
+        )
+
+
+def _subscribe_callback_wrapper(mosq, userdata, mid, count, granted_qos):
+    client = clients.get(mosq, None)
+    if client and client.on_subscribe:
+        client.on_subscribe(
+            client,
+            client.userdata(),
+            mid,
+            count,
+            [granted_qos[i] for i in range(count)],
+        )
+
+
+def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, props):
+    client = clients.get(mosq, None)
+    if client and client.on_subscribe_v5:
+        client.on_subscribe_v5(
+            client,
+            client.userdata(),
+            mid,
+            count,
+            [granted_qos[i] for i in range(count)],
+            props,
+        )
+
+
+def _unsubscribe_callback_wrapper(mosq, userdata, mid):
+    client = clients.get(mosq, None)
+    if client and client.on_unsubscribe:
+        client.on_unsubscribe(client, client.userdata(), mid)
+
+
+def _unsubscribe_v5_callback_wrapper(mosq, userdata, mid, props):
+    client = clients.get(mosq, None)
+    if client and client.on_unsubscribe_v5:
+        client.on_unsubscribe_v5(client, client.userdata(), mid, props)
+
+
+def _log_callback_wrapper(mosq, userdata, level, msg):
+    client = clients.get(mosq, None)
+    if client and client.on_log:
+        client.on_log(client, client.userdata(), LogLevel(level), msg.decode())
+    elif client and client.logger:
+        client.logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
+
+
+clients: weakref.WeakValueDictionary[int, t.Any] = weakref.WeakValueDictionary()
 
 
 class Client:
@@ -133,14 +236,18 @@ class Client:
             libmosq.mosquitto_new,
             client_id,
             clean_start,
-            self._userdata,
+            None,
             use_errno=True,
         )
-        self._set_default_callbacks()
+        clients[self._mosq_ptr] = self
 
     @property
     def mosq_ptr(self):
         return self._mosq_ptr
+
+    @property
+    def logger(self):
+        return self._logger
 
     def __del__(self):
         self.user_data_set(None)
@@ -153,13 +260,6 @@ class Client:
         if is_mosq and func.restype == C.c_int and ret != ErrorCode.SUCCESS:
             raise LibMosqError(ret)
         return ret
-
-    def _set_default_callbacks(self):
-        if self._logger:
-            self.on_log = self._on_log
-
-    def _on_log(self, mosq, userdata, level, msg):
-        self._logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
 
     # void mosquitto_destroy(struct mosquitto *mosq)
     destroy = Method(None, libmosq.mosquitto_destroy, C.c_void_p)
@@ -465,81 +565,76 @@ class Client:
     ssl_get = Method(C.c_void_p, libmosq.mosquitto_ssl_get, C.c_void_p)
 
     # Callbacks
-    # void mosquitto_connect_callback_set(struct mosquitto *mosq, void (*on_connect)(struct mosquitto *, void *, int))
-    ON_CONNECT = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-    on_connect = Callback(libmosq.mosquitto_connect_callback_set, ON_CONNECT)
-
-    # void mosquitto_connect_with_flags_callback_set(struct mosquitto *mosq, void (*on_connect_with_flags)(struct mosquitto *, void *, int, int))
-    ON_CONNECT_WITH_FLAGS = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_int)
+    on_connect = Callback(
+        libmosq.mosquitto_connect_callback_set,
+        ON_CONNECT,
+        _connect_callback_wrapper,
+    )
     on_connect_with_flags = Callback(
-        libmosq.mosquitto_connect_with_flags_callback_set, ON_CONNECT_WITH_FLAGS
+        libmosq.mosquitto_connect_with_flags_callback_set,
+        ON_CONNECT_WITH_FLAGS,
+        _connect_with_flags_callback_wrapper,
     )
-
-    # void mosquitto_connect_v5_callback_set(struct mosquitto *mosq, void (*on_connect_v5)(struct mosquitto *, void *, int, int, const mosquitto_property *))
-    ON_CONNECT_V5 = C.CFUNCTYPE(
-        None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.c_void_p
+    on_connect_v5 = Callback(
+        libmosq.mosquitto_connect_v5_callback_set,
+        ON_CONNECT_V5,
+        _connect_v5_callback_wrapper,
     )
-    on_connect_v5 = Callback(libmosq.mosquitto_connect_v5_callback_set, ON_CONNECT_V5)
-
-    # void mosquitto_disconnect_callback_set(struct mosquitto *mosq, void (*on_disconnect)(struct mosquitto *, void *, int))
-    ON_DISCONNECT = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-    on_disconnect = Callback(libmosq.mosquitto_disconnect_callback_set, ON_DISCONNECT)
-
-    # void mosquitto_disconnect_v5_callback_set(struct mosquitto *mosq, void (*on_disconnect_v5)(struct mosquitto *, void *, int, const mosquitto_property *))
-    ON_DISCONNECT_V5 = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_void_p)
+    on_disconnect = Callback(
+        libmosq.mosquitto_disconnect_callback_set,
+        ON_DISCONNECT,
+        _disconnect_callback_wrapper,
+    )
     on_disconnect_v5 = Callback(
-        libmosq.mosquitto_disconnect_v5_callback_set, ON_DISCONNECT_V5
+        libmosq.mosquitto_disconnect_v5_callback_set,
+        ON_DISCONNECT_V5,
+        _disconnect_v5_callback_wrapper,
     )
-
-    # void mosquitto_publish_callback_set(struct mosquitto *mosq, void (*on_publish)(struct mosquitto *, void *, int))
-    ON_PUBLISH = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
-    on_publish = Callback(libmosq.mosquitto_publish_callback_set, ON_PUBLISH)
-
-    # void mosquitto_publish_v5_callback_set(struct mosquitto *mosq, void (*on_publish_v5)(struct mosquitto *, void *, int, const mosquitto_property *))
-    ON_PUBLISH_V5 = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_void_p)
-    on_publish_v5 = Callback(libmosq.mosquitto_publish_v5_callback_set, ON_PUBLISH_V5)
-
-    # void mosquitto_message_callback_set(struct mosquitto *mosq, void (*on_message)(struct mosquitto *, void *, const struct mosquitto_message *))
-    ON_MESSAGE = C.CFUNCTYPE(
-        None, C.c_void_p, C.py_object, C.POINTER(MQTTMessageStruct)
+    on_publish = Callback(
+        libmosq.mosquitto_publish_callback_set,
+        ON_PUBLISH,
+        _publish_callback_wrapper,
     )
-    on_message = Callback(libmosq.mosquitto_message_callback_set, ON_MESSAGE)
-
-    # void mosquitto_message_v5_callback_set(struct mosquitto *mosq, void (*on_message_v5)(struct mosquitto *, void *, const struct mosquitto_message *, const mosquitto_property *))
-    ON_MESSAGE_V5 = C.CFUNCTYPE(
-        None, C.c_void_p, C.py_object, C.POINTER(MQTTMessageStruct), C.c_void_p
+    on_publish_v5 = Callback(
+        libmosq.mosquitto_publish_v5_callback_set,
+        ON_PUBLISH_V5,
+        _publish_v5_callback_wrapper,
     )
-    on_message_v5 = Callback(libmosq.mosquitto_message_v5_callback_set, ON_MESSAGE_V5)
-
-    # void mosquitto_subscribe_callback_set(struct mosquitto *mosq, void (*on_subscribe)(struct mosquitto *, void *, int, int, const int *))
-    ON_SUBSCRIBE = C.CFUNCTYPE(
-        None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int)
+    on_message = Callback(
+        libmosq.mosquitto_message_callback_set,
+        ON_MESSAGE,
+        _message_callback_wrapper,
     )
-    on_subscribe = Callback(libmosq.mosquitto_subscribe_callback_set, ON_SUBSCRIBE)
-
-    # void mosquitto_subscribe_v5_callback_set(struct mosquitto *mosq, void (*on_subscribe_v5)(struct mosquitto *, void *, int, int, const int *, const mosquitto_property *))
-    ON_SUBSCRIBE_V5 = C.CFUNCTYPE(
-        None, C.c_void_p, C.py_object, C.c_int, C.c_int, C.POINTER(C.c_int), C.c_void_p
+    on_message_v5 = Callback(
+        libmosq.mosquitto_message_v5_callback_set,
+        ON_MESSAGE_V5,
+        _message_v5_callback_wrapper,
+    )
+    on_subscribe = Callback(
+        libmosq.mosquitto_subscribe_callback_set,
+        ON_SUBSCRIBE,
+        _subscribe_callback_wrapper,
     )
     on_subscribe_v5 = Callback(
-        libmosq.mosquitto_subscribe_v5_callback_set, ON_SUBSCRIBE_V5
+        libmosq.mosquitto_subscribe_v5_callback_set,
+        ON_SUBSCRIBE_V5,
+        _subscribe_v5_callback_wrapper,
     )
-
-    # void mosquitto_unsubscribe_callback_set(struct mosquitto *mosq, void (*on_unsubscribe)(struct mosquitto *, void *, int))
-    ON_UNSUBSCRIBE = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int)
     on_unsubscribe = Callback(
-        libmosq.mosquitto_unsubscribe_callback_set, ON_UNSUBSCRIBE
+        libmosq.mosquitto_unsubscribe_callback_set,
+        ON_UNSUBSCRIBE,
+        _unsubscribe_callback_wrapper,
     )
-
-    # void mosquitto_unsubscribe_v5_callback_set(struct mosquitto *mosq, void (*on_unsubscribe_v5)(struct mosquitto *, void *, int, const mosquitto_property *))
-    ON_UNSUBSCRIBE_V5 = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_void_p)
     on_unsubscribe_v5 = Callback(
-        libmosq.mosquitto_unsubscribe_v5_callback_set, ON_UNSUBSCRIBE_V5
+        libmosq.mosquitto_unsubscribe_v5_callback_set,
+        ON_UNSUBSCRIBE_V5,
+        _unsubscribe_v5_callback_wrapper,
     )
-
-    # void mosquitto_log_callback_set(struct mosquitto *mosq, void (*on_log)(struct mosquitto *, void *, int, const char *))
-    ON_LOG = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_char_p)
-    on_log = Callback(libmosq.mosquitto_log_callback_set, ON_LOG)
+    on_log = Callback(
+        libmosq.mosquitto_log_callback_set,
+        ON_LOG,
+        _log_callback_wrapper,
+    )
 
     # SOCKS5 proxy functions
     # int mosquitto_socks5_set(struct mosquitto *mosq, const char *host, int port, const char *username, const char *password)
@@ -592,7 +687,6 @@ class Client:
 
     def user_data_set(self, userdata):
         self._userdata = userdata
-        self._user_data_set(self._userdata)
 
     def userdata(self):
         return self._userdata

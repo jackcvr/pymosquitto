@@ -1,5 +1,4 @@
 from pymosquitto import Client
-from pymosquitto.helpers import Router
 
 from benchmarks import config as c
 
@@ -12,19 +11,11 @@ if c.INTERVAL:
     logger = logging.getLogger()
 
 
-router = Router()
-
-
-@router.on_topic(c.TOPIC)
-def _on_topic():
+def on_message(client, userdata, msg):
     global count
     count += 1
     if count == c.LIMIT:
         client.disconnect()
-
-
-def on_message(client, userdata, msg):
-    router.run(msg.topic)
 
 
 count = 0

@@ -40,4 +40,4 @@ services:
       - broker
       - pub
     command: sh -c "sleep 1 && /usr/bin/time -v python3 -m benchmarks.${MODULE:-pymosq}_sub"
-#    command: sh -c "sleep 1 && /usr/bin/time -v py-spy record -o profile.svg -- python3 -m benchmarks.${MODULE:-pymosq}_sub"
+#    command: sh -c "sleep 1 && /usr/bin/time -v py-spy record -o /app/benchmarks/profile.svg -- python3 -m benchmarks.${MODULE:-pymosq}_sub"
