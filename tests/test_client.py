@@ -1,5 +1,6 @@
 import threading
 import time
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -18,14 +19,14 @@ def client_factory(token):
     return _factory
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def client(client_factory, host, port):
     def _on_connect(client, userdata, rc):
         if rc != c.ConnackCode.ACCEPTED:
             raise RuntimeError(f"Client connection error: {rc.value}/{rc.name}")
         is_connected.set()
 
-    client = client_factory(userdata=SimpleNamespace())
+    client = client_factory(userdata=SimpleNamespace(), logger=logging.getLogger())
     is_connected = threading.Event()
     client.on_connect = _on_connect
     client.connect(host, port)

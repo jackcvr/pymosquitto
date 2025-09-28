@@ -88,14 +88,13 @@ class Method:
         method_name = self._func.__name__
 
         if not hasattr(obj, method_name):
-            _obj = weakref.proxy(obj)
             func = self._func
             is_mosq = self._is_mosq
 
             def method(self_, *args):
                 return self_.call(func, *args, is_mosq=is_mosq)
 
-            setattr(obj, method_name, types.MethodType(method, _obj))
+            setattr(obj, method_name, types.MethodType(method, weakref.proxy(obj)))
 
         return getattr(obj, method_name)
 
@@ -116,62 +115,62 @@ class Callback:
             self._wrapped_callback = self._decorator(self._wrapper)
         elif not callback:
             self._wrapped_callback = self._decorator(0)
-        self._setter(obj.mosq_ptr, self._wrapped_callback)
+        obj.call(self._setter, self._wrapped_callback)
 
     def __get__(self, obj, objtype=None):
         return getattr(obj, self._attr_name)
 
 
 def _connect_callback_wrapper(mosq, userdata, rc):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_connect:
         client.on_connect(client, client.userdata(), ConnackCode(rc))
 
 
 def _connect_with_flags_callback_wrapper(mosq, userdata, rc, flags):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_connect_with_flags:
         client.on_connect_with_flags(client, client.userdata(), ConnackCode(rc), flags)
 
 
 def _connect_v5_callback_wrapper(mosq, userdata, rc, flags, props):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_connect_v5:
         client.on_connect_v5(client, client.userdata(), ConnackCode(rc), flags, props)
 
 
 def _disconnect_callback_wrapper(mosq, userdata, rc):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_disconnect:
         client.on_disconnect(client, client.userdata(), ConnackCode(rc))
 
 
 def _disconnect_v5_callback_wrapper(mosq, userdata, rc, props):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_disconnect_v5:
         client.on_disconnect_v5(client, client.userdata(), ConnackCode(rc), props)
 
 
 def _publish_callback_wrapper(mosq, userdata, mid):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_publish:
         client.on_publish(client, client.userdata(), mid)
 
 
 def _publish_v5_callback_wrapper(mosq, userdata, mid, props):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_publish_v5:
         client.on_publish_v5(client, client.userdata(), mid, props)
 
 
 def _message_callback_wrapper(mosq, userdata, msg):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_message:
         client.on_message(client, client.userdata(), MQTTMessage.from_struct(msg))
 
 
 def _message_v5_callback_wrapper(mosq, userdata, msg, props):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_message_v5:
         client.on_message_v5(
             client, client.userdata(), MQTTMessage.from_struct(msg), props
@@ -179,7 +178,7 @@ def _message_v5_callback_wrapper(mosq, userdata, msg, props):
 
 
 def _subscribe_callback_wrapper(mosq, userdata, mid, count, granted_qos):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_subscribe:
         client.on_subscribe(
             client,
@@ -191,7 +190,7 @@ def _subscribe_callback_wrapper(mosq, userdata, mid, count, granted_qos):
 
 
 def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, props):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_subscribe_v5:
         client.on_subscribe_v5(
             client,
@@ -204,26 +203,23 @@ def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, prop
 
 
 def _unsubscribe_callback_wrapper(mosq, userdata, mid):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_unsubscribe:
         client.on_unsubscribe(client, client.userdata(), mid)
 
 
 def _unsubscribe_v5_callback_wrapper(mosq, userdata, mid, props):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_unsubscribe_v5:
         client.on_unsubscribe_v5(client, client.userdata(), mid, props)
 
 
 def _log_callback_wrapper(mosq, userdata, level, msg):
-    client = clients.get(mosq, None)
+    client = t.cast(Client, userdata)
     if client and client.on_log:
         client.on_log(client, client.userdata(), LogLevel(level), msg.decode())
     elif client and client.logger:
         client.logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
-
-
-clients: weakref.WeakValueDictionary[int, t.Any] = weakref.WeakValueDictionary()
 
 
 class Client:
@@ -236,10 +232,9 @@ class Client:
             libmosq.mosquitto_new,
             client_id,
             clean_start,
-            None,
+            self,
             use_errno=True,
         )
-        clients[self._mosq_ptr] = self
 
     @property
     def mosq_ptr(self):
@@ -250,7 +245,6 @@ class Client:
         return self._logger
 
     def __del__(self):
-        self.user_data_set(None)
         self.destroy()
 
     def call(self, func, *args, is_mosq=True, **kwargs):
