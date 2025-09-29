@@ -76,23 +76,17 @@ class MQTTMessage:
 
 
 class Method:
-    def __init__(
-        self, restype, func, *argtypes, auto_encode=True, auto_decode=True, is_mosq=True
-    ):
-        self._func = bind(
-            restype, func, *argtypes, auto_encode=auto_encode, auto_decode=auto_decode
-        )
-        self._is_mosq = is_mosq
+    def __init__(self, restype, func, *argtypes, **kwargs):
+        self._func = bind(restype, func, *argtypes)
+        self._kwargs = kwargs
 
     def __get__(self, obj, objtype=None):
         method_name = self._func.__name__
 
         if not hasattr(obj, method_name):
-            func = self._func
-            is_mosq = self._is_mosq
 
             def method(self_, *args):
-                return self_.call(func, *args, is_mosq=is_mosq)
+                return self_.call(self._func, *args, **self._kwargs)
 
             setattr(obj, method_name, types.MethodType(method, weakref.proxy(obj)))
 
@@ -247,10 +241,16 @@ class Client:
     def __del__(self):
         self.destroy()
 
-    def call(self, func, *args, is_mosq=True, **kwargs):
+    def call(self, func, *args, is_mosq=True, auto_encode=True, auto_decode=True):
         if self._logger:
             self._logger.debug("CALL: %s%s", func.__name__, (self._mosq_ptr,) + args)
-        ret = call(func, self._mosq_ptr, *args, **kwargs)
+        ret = call(
+            func,
+            self._mosq_ptr,
+            *args,
+            auto_encode=auto_encode,
+            auto_decode=auto_decode,
+        )
         if is_mosq and func.restype == C.c_int and ret != ErrorCode.SUCCESS:
             raise LibMosqError(ret)
         return ret

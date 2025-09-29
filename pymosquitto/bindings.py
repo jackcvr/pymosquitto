@@ -6,32 +6,9 @@ from .constants import LIBMOSQ_PATH
 libmosq = C.CDLL(LIBMOSQ_PATH, use_errno=True)
 
 
-def encode(args):
-    return [arg.encode() if isinstance(arg, str) else arg for arg in args]
-
-
-def bind(restype, func, *argtypes, auto_encode=False, auto_decode=False):
+def bind(restype, func, *argtypes):
     func.restype = restype
     func.argtypes = argtypes
-
-    auto_encode = auto_encode and any(arg == C.c_char_p for arg in argtypes)
-    auto_decode = auto_decode and restype == C.c_char_p
-
-    if auto_encode or auto_decode:
-
-        def wrapper(*args):
-            if auto_encode:
-                args = encode(args)
-            ret = func(*args)
-            if auto_decode:
-                ret = ret.decode()
-            return ret
-
-        wrapper.__name__ = func.__name__
-        wrapper.restype = restype
-        wrapper.argtypes = argtypes
-        return wrapper
-
     return func
 
 
@@ -66,17 +43,13 @@ bind(C.c_void_p, libmosq.mosquitto_new, C.c_char_p, C.c_bool, C.py_object)
 ###
 
 # const char *mosquitto_strerror(int mosq_errno)
-strerror = bind(C.c_char_p, libmosq.mosquitto_strerror, C.c_int, auto_decode=True)
+bind(C.c_char_p, libmosq.mosquitto_strerror, C.c_int)
 
 # const char *mosquitto_connack_string(int connack_code)
-connack_string = bind(
-    C.c_char_p, libmosq.mosquitto_connack_string, C.c_int, auto_decode=True
-)
+bind(C.c_char_p, libmosq.mosquitto_connack_string, C.c_int)
 
 # const char *mosquitto_reason_string(int reason_code)
-reason_string = bind(
-    C.c_char_p, libmosq.mosquitto_reason_string, C.c_int, auto_decode=True
-)
+bind(C.c_char_p, libmosq.mosquitto_reason_string, C.c_int)
 
 # int mosquitto_topic_matches_sub(const char *sub, const char *topic, bool *result)
 bind(
@@ -85,11 +58,28 @@ bind(
     C.c_char_p,
     C.c_char_p,
     C.POINTER(C.c_bool),
-    auto_encode=False,
 )
 
 
-def call(func, *args, use_errno=False):
+def strerror(errno):
+    return libmosq.mosquitto_strerror(errno).decode()
+
+
+def connack_string(code):
+    return libmosq.mosquitto_connack_string(code).decode()
+
+
+def reason_string(code):
+    return libmosq.mosquitto_reason_string(code).decode()
+
+
+def encode(args):
+    return [arg.encode() if isinstance(arg, str) else arg for arg in args]
+
+
+def call(func, *args, use_errno=False, auto_encode=False, auto_decode=False):
+    if auto_encode and any(arg == C.c_char_p for arg in func.argtypes):
+        args = encode(args)
     if use_errno:
         C.set_errno(0)
     ret = func(*args)
@@ -97,6 +87,8 @@ def call(func, *args, use_errno=False):
         err = C.get_errno()
         if err != 0:
             raise OSError(err, os.strerror(err))
+    if auto_decode and func.restype == C.c_char_p:
+        ret = ret.deccode()
     return ret
 
 
