@@ -1,13 +1,27 @@
 import ctypes as C
 import atexit
+import enum
 from dataclasses import dataclass
 import typing as t
 import weakref
 import types
 
-from .constants import LogLevel, LIBMOSQ_MIN_MAJOR_VERSION, ErrorCode, ConnackCode
-from .bindings import bind, call, libmosq, strerror, MQTTMessageStruct
+from .constants import (
+    LogLevel,
+    LIBMOSQ_MIN_MAJOR_VERSION,
+    ErrorCode,
+    ConnackCode,
+    Option,
+    MQTT5PropertyID,
+)
 from .bindings import (
+    bind,
+    call,
+    libmosq,
+    MQTTMessageStruct,
+    check_errno,
+    MQTT5PropertyStruct,
+    LibMosqError,
     ON_CONNECT,
     ON_CONNECT_WITH_FLAGS,
     ON_CONNECT_V5,
@@ -41,18 +55,68 @@ if libmosq.mosquitto_lib_init() != 0:
 atexit.register(libmosq.mosquitto_lib_cleanup)
 
 
-class LibMosqError(Exception):
-    def __init__(self, code):
-        self.code = ErrorCode(code)
+class PropertyFactory(enum.Enum):
+    BYTE = libmosq.mosquitto_property_add_byte
+    INT16 = libmosq.mosquitto_property_add_int16
+    INT32 = libmosq.mosquitto_property_add_int32
+    VARINT = libmosq.mosquitto_property_add_varint
+    BIN = libmosq.mosquitto_property_add_binary
+    STRING = libmosq.mosquitto_property_add_string
+    STRING_PAIR = libmosq.mosquitto_property_add_string_pair
 
-    def __str__(self):
-        return f"libmosquitto error: {self.code.value}/{self.code.name}/{strerror(self.code)}"
+    def __call__(self, identifier: MQTT5PropertyID, *args: t.Any) -> C.c_void_p:
+        prop = C.c_void_p(None)
+        check_errno(self.value(C.byref(prop), identifier, *args))
+        return prop
 
 
-if t.TYPE_CHECKING:
-    LP_MQTTMessageStruct: t.TypeAlias = type[C._Pointer[MQTTMessageStruct]]
-else:
-    LP_MQTTMessageStruct: t.TypeAlias = C.POINTER(MQTTMessageStruct)
+@dataclass(slots=True)
+class MQTT5PropertyValue:
+    i8: int
+    i16: int
+    i32: int
+    varint: int
+    bin: bytes
+    s: str
+
+
+@dataclass(slots=True)
+class MQTT5Property:
+    next: t.Optional["MQTT5Property"]
+    value: MQTT5PropertyValue
+    name: str
+    identifier: MQTT5PropertyID
+    client_generated: bool
+
+    def find(self, identifier: MQTT5PropertyID) -> t.Optional["MQTT5Property"]:
+        prop = self
+        while True:
+            if prop.identifier == identifier:
+                return prop
+            if not prop.next:
+                break
+            prop = prop.next
+        return None
+
+    @classmethod
+    def from_struct(cls, obj: t.Any) -> t.Optional["MQTT5Property"]:
+        if not obj:
+            return None
+        cnt = t.cast(MQTT5PropertyStruct, obj.contents)
+        return cls(
+            next=cls.from_struct(cnt.next) if cnt.next else None,
+            value=MQTT5PropertyValue(
+                cnt.value.i8,
+                cnt.value.i16,
+                cnt.value.i32,
+                cnt.value.varint,
+                C.string_at(cnt.value.bin.v, cnt.value.bin.len),
+                C.string_at(cnt.value.s.v, cnt.value.s.len).decode(),
+            ),
+            name=C.string_at(cnt.name.v, cnt.name.len).decode(),
+            identifier=cnt.identifier,
+            client_generated=cnt.client_generated,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,14 +128,14 @@ class MQTTMessage:
     retain: bool
 
     @classmethod
-    def from_struct(cls, msg: LP_MQTTMessageStruct) -> "MQTTMessage":
-        cnt = t.cast(MQTTMessageStruct, msg.contents)
+    def from_struct(cls, obj: t.Any) -> "MQTTMessage":
+        cnt = t.cast(MQTTMessageStruct, obj.contents)
         return cls(
-            cnt.mid,
-            C.string_at(cnt.topic).decode(),
-            C.string_at(cnt.payload, cnt.payloadlen),
-            cnt.qos,
-            cnt.retain,
+            mid=cnt.mid,
+            topic=C.string_at(cnt.topic).decode(),
+            payload=C.string_at(cnt.payload, cnt.payloadlen),
+            qos=cnt.qos,
+            retain=cnt.retain,
         )
 
 
@@ -127,10 +191,16 @@ def _connect_with_flags_callback_wrapper(mosq, userdata, rc, flags):
         client.on_connect_with_flags(client, client.userdata(), ConnackCode(rc), flags)
 
 
-def _connect_v5_callback_wrapper(mosq, userdata, rc, flags, props):
+def _connect_v5_callback_wrapper(mosq, userdata, rc, flags, prop):
     client = t.cast(Client, userdata)
     if client and client.on_connect_v5:
-        client.on_connect_v5(client, client.userdata(), ConnackCode(rc), flags, props)
+        client.on_connect_v5(
+            client,
+            client.userdata(),
+            ConnackCode(rc),
+            flags,
+            MQTT5Property.from_struct(prop),
+        )
 
 
 def _disconnect_callback_wrapper(mosq, userdata, rc):
@@ -139,10 +209,12 @@ def _disconnect_callback_wrapper(mosq, userdata, rc):
         client.on_disconnect(client, client.userdata(), ConnackCode(rc))
 
 
-def _disconnect_v5_callback_wrapper(mosq, userdata, rc, props):
+def _disconnect_v5_callback_wrapper(mosq, userdata, rc, prop):
     client = t.cast(Client, userdata)
     if client and client.on_disconnect_v5:
-        client.on_disconnect_v5(client, client.userdata(), ConnackCode(rc), props)
+        client.on_disconnect_v5(
+            client, client.userdata(), ConnackCode(rc), MQTT5Property.from_struct(prop)
+        )
 
 
 def _publish_callback_wrapper(mosq, userdata, mid):
@@ -151,10 +223,12 @@ def _publish_callback_wrapper(mosq, userdata, mid):
         client.on_publish(client, client.userdata(), mid)
 
 
-def _publish_v5_callback_wrapper(mosq, userdata, mid, props):
+def _publish_v5_callback_wrapper(mosq, userdata, mid, prop):
     client = t.cast(Client, userdata)
     if client and client.on_publish_v5:
-        client.on_publish_v5(client, client.userdata(), mid, props)
+        client.on_publish_v5(
+            client, client.userdata(), mid, MQTT5Property.from_struct(prop)
+        )
 
 
 def _message_callback_wrapper(mosq, userdata, msg):
@@ -163,11 +237,14 @@ def _message_callback_wrapper(mosq, userdata, msg):
         client.on_message(client, client.userdata(), MQTTMessage.from_struct(msg))
 
 
-def _message_v5_callback_wrapper(mosq, userdata, msg, props):
+def _message_v5_callback_wrapper(mosq, userdata, msg, prop):
     client = t.cast(Client, userdata)
     if client and client.on_message_v5:
         client.on_message_v5(
-            client, client.userdata(), MQTTMessage.from_struct(msg), props
+            client,
+            client.userdata(),
+            MQTTMessage.from_struct(msg),
+            MQTT5Property.from_struct(prop),
         )
 
 
@@ -183,7 +260,7 @@ def _subscribe_callback_wrapper(mosq, userdata, mid, count, granted_qos):
         )
 
 
-def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, props):
+def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, prop):
     client = t.cast(Client, userdata)
     if client and client.on_subscribe_v5:
         client.on_subscribe_v5(
@@ -192,7 +269,7 @@ def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, prop
             mid,
             count,
             [granted_qos[i] for i in range(count)],
-            props,
+            MQTT5Property.from_struct(prop),
         )
 
 
@@ -202,10 +279,12 @@ def _unsubscribe_callback_wrapper(mosq, userdata, mid):
         client.on_unsubscribe(client, client.userdata(), mid)
 
 
-def _unsubscribe_v5_callback_wrapper(mosq, userdata, mid, props):
+def _unsubscribe_v5_callback_wrapper(mosq, userdata, mid, prop):
     client = t.cast(Client, userdata)
     if client and client.on_unsubscribe_v5:
-        client.on_unsubscribe_v5(client, client.userdata(), mid, props)
+        client.on_unsubscribe_v5(
+            client, client.userdata(), mid, MQTT5Property.from_struct(prop)
+        )
 
 
 def _log_callback_wrapper(mosq, userdata, level, msg):
@@ -217,7 +296,14 @@ def _log_callback_wrapper(mosq, userdata, level, msg):
 
 
 class Client:
-    def __init__(self, client_id=None, clean_start=True, userdata=None, logger=None):
+    def __init__(
+        self,
+        client_id=None,
+        clean_start=True,
+        userdata=None,
+        logger=None,
+        protocol=None,
+    ):
         if client_id is not None:
             client_id = client_id.encode()
         self._userdata = userdata
@@ -229,6 +315,8 @@ class Client:
             self,
             use_errno=True,
         )
+        if protocol is not None:
+            self.int_option(Option.PROTOCOL_VERSION, protocol)
 
     @property
     def mosq_ptr(self):
@@ -241,18 +329,21 @@ class Client:
     def __del__(self):
         self.destroy()
 
-    def call(self, func, *args, is_mosq=True, auto_encode=True, auto_decode=True):
+    def call(
+        self, func, *args, mosq_ptr=True, check=True, auto_encode=True, auto_decode=True
+    ):
         if self._logger:
             self._logger.debug("CALL: %s%s", func.__name__, (self._mosq_ptr,) + args)
+        if mosq_ptr:
+            args = (self._mosq_ptr,) + args
         ret = call(
             func,
-            self._mosq_ptr,
             *args,
             auto_encode=auto_encode,
             auto_decode=auto_decode,
         )
-        if is_mosq and func.restype == C.c_int and ret != ErrorCode.SUCCESS:
-            raise LibMosqError(ret)
+        if check and func.restype == C.c_int:
+            check_errno(ret)
         return ret
 
     # void mosquitto_destroy(struct mosquitto *mosq)
@@ -357,7 +448,7 @@ class Client:
     # int mosquitto_reconnect_async(struct mosquitto *mosq)
     reconnect_async = Method(C.c_int, libmosq.mosquitto_reconnect_async, C.c_void_p)
     # int mosquitto_disconnect(struct mosquitto *mosq)
-    disconnect = Method(C.c_int, libmosq.mosquitto_disconnect, C.c_void_p)
+    _disconnect = Method(C.c_int, libmosq.mosquitto_disconnect, C.c_void_p)
     # int mosquitto_disconnect_v5(struct mosquitto *mosq, int reason_code, const mosquitto_property *props)
     disconnect_v5 = Method(
         C.c_int, libmosq.mosquitto_disconnect_v5, C.c_void_p, C.c_int, C.c_void_p
@@ -378,7 +469,7 @@ class Client:
         auto_encode=False,
     )
     # int mosquitto_publish_v5(struct mosquitto *mosq, int *mid, const char *topic, int payloadlen, const void *payload, int qos, bool retain, const mosquitto_property *props)
-    publish_v5 = Method(
+    _publish_v5 = Method(
         C.c_int,
         libmosq.mosquitto_publish_v5,
         C.c_void_p,
@@ -401,7 +492,7 @@ class Client:
         auto_encode=False,
     )
     # int mosquitto_subscribe_v5(struct mosquitto *mosq, int *mid, const char *sub, int qos, const mosquitto_property *props)
-    subscribe_v5 = Method(
+    _subscribe_v5 = Method(
         C.c_int,
         libmosq.mosquitto_subscribe_v5,
         C.c_void_p,
@@ -409,6 +500,7 @@ class Client:
         C.c_char_p,
         C.c_int,
         C.c_void_p,
+        auto_encode=False,
     )
     # int mosquitto_subscribe_multiple(struct mosquitto *mosq, int *mid, int sub_count, const char **subs, int qos, int options, const mosquitto_property *props)
     subscribe_multiple = Method(
@@ -432,13 +524,14 @@ class Client:
         auto_encode=False,
     )
     # int mosquitto_unsubscribe_v5(struct mosquitto *mosq, int *mid, const char *sub, const mosquitto_property *props)
-    unsubscribe_v5 = Method(
+    _unsubscribe_v5 = Method(
         C.c_int,
         libmosq.mosquitto_unsubscribe_v5,
         C.c_void_p,
         C.POINTER(C.c_int),
         C.c_char_p,
         C.c_void_p,
+        auto_encode=False,
     )
     # int mosquitto_unsubscribe_multiple(struct mosquitto *mosq, int *mid, int sub_count, const char **subs, const mosquitto_property *props)
     unsubscribe_multiple = Method(
@@ -473,11 +566,9 @@ class Client:
 
     # Network loop (helper functions)
     # int mosquitto_socket(struct mosquitto *mosq)
-    _socket = Method(C.c_int, libmosq.mosquitto_socket, C.c_void_p, is_mosq=False)
+    _socket = Method(C.c_int, libmosq.mosquitto_socket, C.c_void_p, check=False)
     # bool mosquitto_want_write(struct mosquitto *mosq)
-    want_write = Method(
-        C.c_int, libmosq.mosquitto_want_write, C.c_void_p, is_mosq=False
-    )
+    want_write = Method(C.c_int, libmosq.mosquitto_want_write, C.c_void_p, check=False)
     # int mosquitto_threaded_set(struct mosquitto *mosq, bool threaded)
     threaded_set = Method(C.c_int, libmosq.mosquitto_threaded_set, C.c_void_p, C.c_bool)
 
@@ -531,7 +622,7 @@ class Client:
         C.c_char_p,
         C.c_char_p,
         C.c_char_p,
-        C.c_char_p,
+        C.c_void_p,
     )
     # int mosquitto_tls_insecure_set(struct mosquitto *mosq, bool value)
     tls_insecure_set = Method(
@@ -642,11 +733,29 @@ class Client:
         C.c_char_p,
     )
 
-    def connect(self, host, port=1883, keepalive=60):
-        return self._connect(host.encode(), port, keepalive)
+    def connect(self, host, port=1883, keepalive=60, bind_address=None, props=None):
+        host = host.encode()
+        bind_address = bind_address.encode() if bind_address else None
+        if bind_address and props:
+            return self.connect_bind_v5(host, port, keepalive, bind_address, props)
+        elif bind_address:
+            return self.connect_bind(host, port, keepalive, bind_address)
+        elif props:
+            return self.connect_bind_v5(host, port, keepalive, None, props)
+        return self._connect(host, port, keepalive)
 
     def connect_async(self, host, port=1883, keepalive=60):
         return self._connect_async(host.encode(), port, keepalive)
+
+    def disconnect(self, strict=True):
+        if strict:
+            self._disconnect()
+        else:
+            try:
+                self._disconnect()
+            except LibMosqError as e:
+                if e.code != ErrorCode.NO_CONN:
+                    raise e
 
     def socket(self):
         fd = self._socket()
@@ -655,28 +764,45 @@ class Client:
     def loop_forever(self, timeout=-1):
         return self._loop_forever(timeout, 1)
 
-    def publish(self, topic, payload, qos=0, retain=False):
+    def publish(self, topic, payload, qos=0, retain=False, props=None):
         mid = C.c_int(0)
         if isinstance(payload, str):
             payload = payload.encode()
-        self._publish(
-            C.byref(mid),
-            topic.encode(),
-            len(payload),
-            C.c_char_p(payload),
-            qos,
-            retain,
-        )
+        if props:
+            self._publish_v5(
+                C.byref(mid),
+                topic.encode(),
+                len(payload),
+                C.c_char_p(payload),
+                qos,
+                retain,
+                props,
+            )
+        else:
+            self._publish(
+                C.byref(mid),
+                topic.encode(),
+                len(payload),
+                C.c_char_p(payload),
+                qos,
+                retain,
+            )
         return mid.value
 
-    def subscribe(self, topic, qos=0):
+    def subscribe(self, topic, qos=0, props=None):
         mid = C.c_int(0)
-        self._subscribe(C.byref(mid), topic.encode(), qos)
+        if props:
+            self._subscribe_v5(C.byref(mid), topic.encode(), qos, props)
+        else:
+            self._subscribe(C.byref(mid), topic.encode(), qos)
         return mid.value
 
-    def unsubscribe(self, topic):
+    def unsubscribe(self, topic, props=None):
         mid = C.c_int(0)
-        self._unsubscribe(C.byref(mid), topic.encode())
+        if props:
+            self._unsubscribe_v5(C.byref(mid), topic.encode(), props)
+        else:
+            self._unsubscribe(C.byref(mid), topic.encode())
         return mid.value
 
     def user_data_set(self, userdata):

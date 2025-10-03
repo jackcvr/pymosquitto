@@ -17,15 +17,11 @@ def topic_matches_sub(sub: str, topic: str) -> bool:
     return res.value
 
 
-class Router:
+class TopicMatcher:
     def __init__(self) -> None:
         self._handlers: dict[str, t.Callable] = {}
 
-    def run(self, topic: str, *args: t.Any, **kwargs: t.Any) -> None:
-        for callback in self.topic_callbacks(topic):
-            callback(*args, **kwargs)
-
-    def topic_callbacks(self, topic: str) -> t.Iterator[t.Callable]:
+    def find(self, topic: str) -> t.Iterator[t.Callable]:
         for sub, func in self._handlers.items():
             if topic_matches_sub(sub, topic):
                 yield func

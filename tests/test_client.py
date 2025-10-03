@@ -1,46 +1,10 @@
 import threading
 import time
-import logging
-from types import SimpleNamespace
 
-import pytest
+from pymosquitto.client import Client
+from pymosquitto.constants import ConnackCode
 
-from pymosquitto.client import Client, LibMosqError
-from pymosquitto import constants as c
-
-
-@pytest.fixture(scope="session")
-def client_factory(token):
-    def _factory(**kwargs):
-        client = Client(**kwargs)
-        client.username_pw_set(token, "")
-        return client
-
-    return _factory
-
-
-@pytest.fixture
-def client(client_factory, host, port):
-    def _on_connect(client, userdata, rc):
-        if rc != c.ConnackCode.ACCEPTED:
-            raise RuntimeError(f"Client connection error: {rc.value}/{rc.name}")
-        is_connected.set()
-
-    client = client_factory(userdata=SimpleNamespace(), logger=logging.getLogger())
-    is_connected = threading.Event()
-    client.on_connect = _on_connect
-    client.connect(host, port)
-    client.loop_start()
-    assert is_connected.wait(1)
-    client.on_connect = None
-    try:
-        yield client
-    finally:
-        try:
-            client.disconnect()
-        except LibMosqError as e:
-            if e.code != c.ErrorCode.NO_CONN:
-                raise e
+import constants as c
 
 
 def test_del():
@@ -77,6 +41,22 @@ def test_unset_callbacks(client):
     client.publish("test", "123", qos=1)
     assert is_recv.wait(1)
     time.sleep(0.1)
+
+
+def test_on_connect_with_flags(client_factory):
+    def _on_connect(client, userdata, rc, flags):
+        if rc != ConnackCode.ACCEPTED:
+            raise RuntimeError(f"Client connection error: {rc.value}/{rc.name}")
+        assert flags == 0  # fix it?
+        is_connected.set()
+
+    is_connected = threading.Event()
+    client = client_factory()
+    client.on_connect_with_flags = _on_connect
+    client.connect(c.HOST, c.PORT)
+    client.loop_start()
+    assert is_connected.wait(1)
+    client.disconnect()
 
 
 def test_on_message(client):

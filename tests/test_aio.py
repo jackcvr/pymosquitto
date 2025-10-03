@@ -1,4 +1,3 @@
-import logging
 import asyncio
 
 import pytest
@@ -6,14 +5,17 @@ import pytest
 from pymosquitto.constants import ConnackCode
 from pymosquitto.aio import AsyncClient, TrueAsyncClient
 
+import constants as c
+
 CLIENT_CLASSES = [AsyncClient, TrueAsyncClient]
 
 
 @pytest.fixture(scope="session")
-def client_factory(token):
+def client_factory():
     def _factory(cls):
-        client = cls(logger=logging.getLogger())
-        client.mosq.username_pw_set(token, "")
+        client = cls()
+        if c.USERNAME or c.PASSWORD:
+            client.mosq.username_pw_set(c.USERNAME, c.PASSWORD)
         return client
 
     return _factory
@@ -21,11 +23,11 @@ def client_factory(token):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cls", CLIENT_CLASSES)
-async def test_pub_sub(cls, client_factory, host, port):
+async def test_pub_sub(cls, client_factory):
     count = 3
 
     async with client_factory(cls) as client:
-        await client.connect(host, port)
+        await client.connect(c.HOST, c.PORT)
         await client.subscribe("test", qos=1)
 
         for i in range(count):
@@ -46,9 +48,9 @@ async def test_pub_sub(cls, client_factory, host, port):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cls", CLIENT_CLASSES)
-async def test_multi_connect(cls, client_factory, host, port):
+async def test_multi_connect(cls, client_factory):
     async with client_factory(cls) as client:
-        task = client.loop.create_task(client.connect(host, port))
-        rc1 = await client.connect(host, port)
+        task = client.loop.create_task(client.connect(c.HOST, c.PORT))
+        rc1 = await client.connect(c.HOST, c.PORT)
         rc2 = await task
         assert rc1 == rc2 == ConnackCode.ACCEPTED

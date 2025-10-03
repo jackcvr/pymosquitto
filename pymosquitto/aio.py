@@ -4,8 +4,8 @@ from collections import deque
 import abc
 
 from pymosquitto.bindings import connack_string
-from pymosquitto.client import Client, LibMosqError
-from pymosquitto.constants import ConnackCode, ErrorCode
+from pymosquitto.client import Client
+from pymosquitto.constants import ConnackCode
 
 
 class BaseAsyncClient(abc.ABC):
@@ -26,11 +26,7 @@ class BaseAsyncClient(abc.ABC):
         return self
 
     async def __aexit__(self, *_):
-        try:
-            await self.disconnect()
-        except LibMosqError as e:
-            if e.code != ErrorCode.NO_CONN:
-                raise e from None
+        await self.disconnect(strict=False)
 
     @property
     def mosq(self):
@@ -83,11 +79,11 @@ class BaseAsyncClient(abc.ABC):
             raise ConnectionError(connack_string(rc))
         return rc
 
-    async def disconnect(self):
+    async def disconnect(self, strict=True):
         if self._disconn_future:
             return await self._disconn_future
         self._disconn_future = self._loop.create_future()
-        self._mosq.disconnect()
+        self._mosq.disconnect(strict=strict)
         rc = await self._disconn_future
         self._disconn_future = None
         return rc

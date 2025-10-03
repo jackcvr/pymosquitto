@@ -1,10 +1,9 @@
 import signal
-import typing as t
 import queue
 
-from pymosquitto import helpers as h
+import pytest
 
-_signal_handlers: dict[int, t.Any] = {}
+from pymosquitto import helpers as h
 
 
 def test_topic_matches_sub():
@@ -12,23 +11,58 @@ def test_topic_matches_sub():
     assert not h.topic_matches_sub("a/b/#", "a/a")
 
 
-def test_router():
-    _res = []
+@pytest.mark.parametrize(
+    "sub,topic",
+    [
+        ("foo/bar", "foo/bar"),
+        ("foo/+", "foo/bar"),
+        ("foo/+/baz", "foo/bar/baz"),
+        ("foo/+/#", "foo/bar/baz"),
+        ("A/B/+/#", "A/B/B/C"),
+        ("#", "foo/bar/baz"),
+        ("#", "/foo/bar"),
+        ("/#", "/foo/bar"),
+        ("$SYS/bar", "$SYS/bar"),
+    ],
+)
+def test_matching(sub, topic):
+    assert h.topic_matches_sub(sub, topic)
 
-    def abc(res):
-        res.append("abc")
 
-    router = h.Router()
-    router.set_topic_callback("a/b/c", abc)
+@pytest.mark.parametrize(
+    "sub,topic",
+    [
+        ("test/6/#", "test/3"),
+        ("foo/bar", "foo"),
+        ("foo/+", "foo/bar/baz"),
+        ("foo/+/baz", "foo/bar/bar"),
+        ("foo/+/#", "fo2/bar/baz"),
+        ("/#", "foo/bar"),
+        ("#", "$SYS/bar"),
+        ("$BOB/bar", "$SYS/bar"),
+    ],
+)
+def test_not_matching(sub, topic):
+    assert not h.topic_matches_sub(sub, topic)
 
-    @router.on_topic("c/b/a")
-    def cba(res):
-        res.append("cba")
 
-    router.run("a/b/c", _res)
-    assert _res == ["abc"]
-    router.run("c/b/a", _res)
-    assert _res == ["abc", "cba"]
+def test_topic_matcher():
+    def a():
+        pass
+
+    def ab():
+        pass
+
+    matcher = h.TopicMatcher()
+    matcher.set_topic_callback("a/#", a)
+    matcher.set_topic_callback("a/b/#", ab)
+
+    @matcher.on_topic("c/b/a")
+    def cba():
+        pass
+
+    assert list(matcher.find("a/b/d")) == [a, ab]
+    assert list(matcher.find("c/b/a")) == [cba]
 
 
 def test_csignal():
