@@ -19,9 +19,8 @@ from .bindings import (
     call,
     libmosq,
     MQTTMessageStruct,
-    check_errno,
     MQTT5PropertyStruct,
-    LibMosqError,
+    strerror,
     ON_CONNECT,
     ON_CONNECT_WITH_FLAGS,
     ON_CONNECT_V5,
@@ -53,6 +52,20 @@ if LIBMOSQ_VERSION[0] < LIBMOSQ_MIN_MAJOR_VERSION:
 if libmosq.mosquitto_lib_init() != 0:
     raise RuntimeError("libmosquitto initialization failed")
 atexit.register(libmosq.mosquitto_lib_cleanup)
+
+
+class MosquittoError(Exception):
+    def __init__(self, code):
+        self.code = ErrorCode(code)
+
+    def __str__(self):
+        return f"libmosquitto error: {self.code.value}/{self.code.name}/{strerror(self.code)}"
+
+
+def check_errno(errno):
+    if errno != ErrorCode.SUCCESS:
+        raise MosquittoError(errno)
+    return errno
 
 
 class PropertyFactory(enum.Enum):
@@ -150,7 +163,7 @@ class Method:
         if not hasattr(obj, method_name):
 
             def method(self_, *args):
-                return self_.call(self._func, *args, **self._kwargs)
+                return self_.call(self._func, self_.ptr, *args, **self._kwargs)
 
             setattr(obj, method_name, types.MethodType(method, weakref.proxy(obj)))
 
@@ -173,26 +186,26 @@ class Callback:
             self._wrapped_callback = self._decorator(self._wrapper)
         elif not callback:
             self._wrapped_callback = self._decorator(0)
-        obj.call(self._setter, self._wrapped_callback)
+        obj.call(self._setter, obj.ptr, self._wrapped_callback)
 
     def __get__(self, obj, objtype=None):
         return getattr(obj, self._attr_name)
 
 
-def _connect_callback_wrapper(mosq, userdata, rc):
-    client = t.cast(Client, userdata)
+def _connect_callback_wrapper(_, userdata, rc):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_connect:
         client.on_connect(client, client.userdata(), ConnackCode(rc))
 
 
-def _connect_with_flags_callback_wrapper(mosq, userdata, rc, flags):
-    client = t.cast(Client, userdata)
+def _connect_with_flags_callback_wrapper(_, userdata, rc, flags):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_connect_with_flags:
         client.on_connect_with_flags(client, client.userdata(), ConnackCode(rc), flags)
 
 
-def _connect_v5_callback_wrapper(mosq, userdata, rc, flags, prop):
-    client = t.cast(Client, userdata)
+def _connect_v5_callback_wrapper(_, userdata, rc, flags, prop):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_connect_v5:
         client.on_connect_v5(
             client,
@@ -203,42 +216,42 @@ def _connect_v5_callback_wrapper(mosq, userdata, rc, flags, prop):
         )
 
 
-def _disconnect_callback_wrapper(mosq, userdata, rc):
-    client = t.cast(Client, userdata)
+def _disconnect_callback_wrapper(_, userdata, rc):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_disconnect:
         client.on_disconnect(client, client.userdata(), ConnackCode(rc))
 
 
-def _disconnect_v5_callback_wrapper(mosq, userdata, rc, prop):
-    client = t.cast(Client, userdata)
+def _disconnect_v5_callback_wrapper(_, userdata, rc, prop):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_disconnect_v5:
         client.on_disconnect_v5(
             client, client.userdata(), ConnackCode(rc), MQTT5Property.from_struct(prop)
         )
 
 
-def _publish_callback_wrapper(mosq, userdata, mid):
-    client = t.cast(Client, userdata)
+def _publish_callback_wrapper(_, userdata, mid):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_publish:
         client.on_publish(client, client.userdata(), mid)
 
 
-def _publish_v5_callback_wrapper(mosq, userdata, mid, prop):
-    client = t.cast(Client, userdata)
+def _publish_v5_callback_wrapper(_, userdata, mid, prop):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_publish_v5:
         client.on_publish_v5(
             client, client.userdata(), mid, MQTT5Property.from_struct(prop)
         )
 
 
-def _message_callback_wrapper(mosq, userdata, msg):
-    client = t.cast(Client, userdata)
+def _message_callback_wrapper(_, userdata, msg):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_message:
         client.on_message(client, client.userdata(), MQTTMessage.from_struct(msg))
 
 
-def _message_v5_callback_wrapper(mosq, userdata, msg, prop):
-    client = t.cast(Client, userdata)
+def _message_v5_callback_wrapper(_, userdata, msg, prop):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_message_v5:
         client.on_message_v5(
             client,
@@ -248,8 +261,8 @@ def _message_v5_callback_wrapper(mosq, userdata, msg, prop):
         )
 
 
-def _subscribe_callback_wrapper(mosq, userdata, mid, count, granted_qos):
-    client = t.cast(Client, userdata)
+def _subscribe_callback_wrapper(_, userdata, mid, count, granted_qos):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_subscribe:
         client.on_subscribe(
             client,
@@ -260,8 +273,8 @@ def _subscribe_callback_wrapper(mosq, userdata, mid, count, granted_qos):
         )
 
 
-def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, prop):
-    client = t.cast(Client, userdata)
+def _subscribe_v5_callback_wrapper(_, userdata, mid, count, granted_qos, prop):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_subscribe_v5:
         client.on_subscribe_v5(
             client,
@@ -273,29 +286,29 @@ def _subscribe_v5_callback_wrapper(mosq, userdata, mid, count, granted_qos, prop
         )
 
 
-def _unsubscribe_callback_wrapper(mosq, userdata, mid):
-    client = t.cast(Client, userdata)
+def _unsubscribe_callback_wrapper(_, userdata, mid):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_unsubscribe:
         client.on_unsubscribe(client, client.userdata(), mid)
 
 
-def _unsubscribe_v5_callback_wrapper(mosq, userdata, mid, prop):
-    client = t.cast(Client, userdata)
+def _unsubscribe_v5_callback_wrapper(_, userdata, mid, prop):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_unsubscribe_v5:
         client.on_unsubscribe_v5(
             client, client.userdata(), mid, MQTT5Property.from_struct(prop)
         )
 
 
-def _log_callback_wrapper(mosq, userdata, level, msg):
-    client = t.cast(Client, userdata)
+def _log_callback_wrapper(_, userdata, level, msg):
+    client = t.cast(Mosquitto, userdata)
     if client and client.on_log:
         client.on_log(client, client.userdata(), LogLevel(level), msg.decode())
     elif client and client.logger:
         client.logger.debug("MOSQ/%s %s", LogLevel(level).name, msg.decode())
 
 
-class Client:
+class Mosquitto:
     def __init__(
         self,
         client_id=None,
@@ -308,7 +321,7 @@ class Client:
             client_id = client_id.encode()
         self._userdata = userdata
         self._logger = logger
-        self._mosq_ptr = call(
+        self._ptr = call(
             libmosq.mosquitto_new,
             client_id,
             clean_start,
@@ -319,8 +332,8 @@ class Client:
             self.int_option(Option.PROTOCOL_VERSION, protocol)
 
     @property
-    def mosq_ptr(self):
-        return self._mosq_ptr
+    def ptr(self):
+        return self._ptr
 
     @property
     def logger(self):
@@ -329,13 +342,9 @@ class Client:
     def __del__(self):
         self.destroy()
 
-    def call(
-        self, func, *args, mosq_ptr=True, check=True, auto_encode=True, auto_decode=True
-    ):
+    def call(self, func, *args, check=True, auto_encode=True, auto_decode=True):
         if self._logger:
-            self._logger.debug("CALL: %s%s", func.__name__, (self._mosq_ptr,) + args)
-        if mosq_ptr:
-            args = (self._mosq_ptr,) + args
+            self._logger.debug("CALL: %s%s", func.__name__, args)
         ret = call(
             func,
             *args,
@@ -753,7 +762,7 @@ class Client:
         else:
             try:
                 self._disconnect()
-            except LibMosqError as e:
+            except MosquittoError as e:
                 if e.code != ErrorCode.NO_CONN:
                     raise e
 

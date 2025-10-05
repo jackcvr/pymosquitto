@@ -5,7 +5,7 @@ import threading
 import pytest
 
 from pymosquitto.constants import ConnackCode
-from pymosquitto.client import Client
+from pymosquitto.client import Mosquitto
 
 import constants as c
 
@@ -15,7 +15,7 @@ default_logger = logging.getLogger()
 @pytest.fixture(scope="session")
 def client_factory():
     def _factory(logger=default_logger, userdata=SimpleNamespace(), **kwargs):
-        client = Client(logger=logger, userdata=userdata, **kwargs)
+        client = Mosquitto(logger=logger, userdata=userdata, **kwargs)
         if c.USERNAME or c.PASSWORD:
             client.username_pw_set(c.USERNAME, c.PASSWORD)
         return client

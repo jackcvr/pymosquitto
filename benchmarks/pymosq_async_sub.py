@@ -1,6 +1,6 @@
 import asyncio
 
-from pymosquitto.aio import AsyncClient as Client
+from pymosquitto.aio import AsyncMosquitto as Client
 
 from benchmarks import config as c
 

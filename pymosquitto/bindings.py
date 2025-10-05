@@ -1,7 +1,7 @@
 import ctypes as C
 import os
 
-from .constants import LIBMOSQ_PATH, ErrorCode
+from .constants import LIBMOSQ_PATH
 
 libmosq = C.CDLL(LIBMOSQ_PATH, use_errno=True)
 
@@ -241,35 +241,6 @@ bind(
 )
 
 
-def call(func, *args, use_errno=False, auto_encode=False, auto_decode=False):
-    if auto_encode and any(arg == C.c_char_p for arg in func.argtypes):
-        args = [arg.encode() if isinstance(arg, str) else arg for arg in args]
-    if use_errno:
-        C.set_errno(0)
-    ret = func(*args)
-    if use_errno:
-        err = C.get_errno()
-        if err != 0:
-            raise OSError(err, os.strerror(err))
-    if auto_decode and func.restype == C.c_char_p:
-        ret = ret.deccode()
-    return ret
-
-
-class LibMosqError(Exception):
-    def __init__(self, code):
-        self.code = ErrorCode(code)
-
-    def __str__(self):
-        return f"libmosquitto error: {self.code.value}/{self.code.name}/{strerror(self.code)}"
-
-
-def check_errno(errno):
-    if errno != ErrorCode.SUCCESS:
-        raise LibMosqError(errno)
-    return errno
-
-
 class MQTTMessageStruct(C.Structure):
     _fields_ = (
         ("mid", C.c_int),
@@ -349,3 +320,18 @@ ON_UNSUBSCRIBE_V5 = C.CFUNCTYPE(
     None, C.c_void_p, C.py_object, C.c_int, C.POINTER(MQTT5PropertyStruct)
 )
 ON_LOG = C.CFUNCTYPE(None, C.c_void_p, C.py_object, C.c_int, C.c_char_p)
+
+
+def call(func, *args, use_errno=False, auto_encode=False, auto_decode=False):
+    if auto_encode and any(arg == C.c_char_p for arg in func.argtypes):
+        args = [arg.encode() if isinstance(arg, str) else arg for arg in args]
+    if use_errno:
+        C.set_errno(0)
+    ret = func(*args)
+    if use_errno:
+        err = C.get_errno()
+        if err != 0:
+            raise OSError(err, os.strerror(err))
+    if auto_decode and func.restype == C.c_char_p:
+        ret = ret.deccode()
+    return ret

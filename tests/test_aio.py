@@ -3,11 +3,11 @@ import asyncio
 import pytest
 
 from pymosquitto.constants import ConnackCode
-from pymosquitto.aio import AsyncClient, TrueAsyncClient
+from pymosquitto.aio import AsyncMosquitto, TrueAsyncMosquitto
 
 import constants as c
 
-CLIENT_CLASSES = [AsyncClient, TrueAsyncClient]
+CLIENT_CLASSES = [AsyncMosquitto, TrueAsyncMosquitto]
 
 
 @pytest.fixture(scope="session")

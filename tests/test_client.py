@@ -1,7 +1,7 @@
 import threading
 import time
 
-from pymosquitto.client import Client
+from pymosquitto.client import Mosquitto
 from pymosquitto.constants import ConnackCode
 
 import constants as c
@@ -10,7 +10,7 @@ import constants as c
 def test_del():
     is_del = False
 
-    class MyClient(Client):
+    class MyClient(Mosquitto):
         def __del__(self):
             super().__del__()
             nonlocal is_del

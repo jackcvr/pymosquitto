@@ -4,13 +4,13 @@ from collections import deque
 import abc
 
 from pymosquitto.bindings import connack_string
-from pymosquitto.client import Client
+from pymosquitto.client import Mosquitto
 from pymosquitto.constants import ConnackCode
 
 
-class BaseAsyncClient(abc.ABC):
+class BaseAsyncMosquitto(abc.ABC):
     def __init__(self, *args, loop=None, **kwargs):
-        self._mosq = Client(*args, **kwargs)
+        self._mosq = Mosquitto(*args, **kwargs)
         self._loop = loop or asyncio.get_event_loop()
         self._conn_future = None
         self._disconn_future = None
@@ -116,7 +116,7 @@ class BaseAsyncClient(abc.ABC):
             yield msg
 
 
-class AsyncClient(BaseAsyncClient):
+class AsyncMosquitto(BaseAsyncMosquitto):
     def __init__(self, *args, buffer_size=2000, flush_interval=0.05, **kwargs):
         super().__init__(*args, **kwargs)
         self._buffer_size = buffer_size
@@ -175,7 +175,7 @@ class AsyncClient(BaseAsyncClient):
             pass
 
 
-class TrueAsyncClient(BaseAsyncClient):
+class TrueAsyncMosquitto(BaseAsyncMosquitto):
     MISC_SLEEP_TIME = 1
 
     def __init__(self, *args, **kwargs):
