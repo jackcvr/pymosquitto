@@ -52,18 +52,6 @@ bind(C.c_char_p, libmosq.mosquitto_connack_string, C.c_int)
 bind(C.c_char_p, libmosq.mosquitto_reason_string, C.c_int)
 
 
-def strerror(errno):
-    return libmosq.mosquitto_strerror(errno).decode()
-
-
-def connack_string(code):
-    return libmosq.mosquitto_connack_string(code).decode()
-
-
-def reason_string(code):
-    return libmosq.mosquitto_reason_string(code).decode()
-
-
 # int mosquitto_topic_matches_sub(const char *sub, const char *topic, bool *result)
 bind(
     C.c_int,
@@ -335,3 +323,15 @@ def call(func, *args, use_errno=False, auto_encode=False, auto_decode=False):
     if auto_decode and func.restype == C.c_char_p:
         ret = ret.deccode()
     return ret
+
+
+def strerror(errno):
+    return libmosq.mosquitto_strerror(errno).decode()
+
+
+def connack_string(code):
+    return libmosq.mosquitto_connack_string(code).decode()
+
+
+def reason_string(code):
+    return libmosq.mosquitto_reason_string(code).decode()
