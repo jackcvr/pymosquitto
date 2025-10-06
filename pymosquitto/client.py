@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import typing as t
 import weakref
 import types
+import os
 
 from .constants import (
     LogLevel,
@@ -16,7 +17,6 @@ from .constants import (
 )
 from .bindings import (
     bind,
-    call,
     libmosq,
     MQTTMessageStruct,
     MQTT5PropertyStruct,
@@ -66,6 +66,21 @@ def check_errno(errno):
     if errno != ErrorCode.SUCCESS:
         raise MosquittoError(errno)
     return errno
+
+
+def call(func, *args, use_errno=False, auto_encode=False, auto_decode=False):
+    if auto_encode and any(arg == C.c_char_p for arg in func.argtypes):
+        args = [arg.encode() if isinstance(arg, str) else arg for arg in args]
+    if use_errno:
+        C.set_errno(0)
+    ret = func(*args)
+    if use_errno:
+        err = C.get_errno()
+        if err != 0:
+            raise OSError(err, os.strerror(err))
+    if auto_decode and func.restype == C.c_char_p:
+        ret = ret.decode()
+    return ret
 
 
 class PropertyFactory(enum.Enum):

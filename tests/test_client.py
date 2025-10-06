@@ -1,10 +1,29 @@
 import threading
 import time
+import errno
+from ctypes.util import find_library
+import ctypes as C
 
-from pymosquitto.client import Mosquitto
+import pytest
+
+from pymosquitto.client import Mosquitto, call
 from pymosquitto.constants import ConnackCode
 
 import constants as c
+
+libc = C.CDLL(find_library("c"), use_errno=True)
+
+
+def test_call():
+    text = b"test"
+    ret = call(libc.printf, text)
+    assert ret == len(text)
+
+
+def test_call_error():
+    with pytest.raises(OSError) as e:
+        call(libc.read, C.byref(C.c_int()), use_errno=True)
+    assert e.value.errno == errno.EBADF
 
 
 def test_del():

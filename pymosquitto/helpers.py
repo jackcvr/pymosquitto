@@ -1,7 +1,8 @@
 import ctypes as C
 import typing as t
 
-from .bindings import call, libmosq, bind
+from .bindings import libmosq, bind
+from .client import call
 
 SIGNAL_WRAPPER = C.CFUNCTYPE(None, C.c_int)
 

@@ -1,12 +1,7 @@
 import ctypes as C
-import errno
-from ctypes.util import find_library
 
-import pytest
-from pymosquitto.bindings import libmosq, strerror, connack_string, reason_string, call
+from pymosquitto.bindings import libmosq, strerror, connack_string, reason_string
 from pymosquitto.constants import ErrorCode, ConnackCode, ReasonCode
-
-libc = C.CDLL(find_library("c"), use_errno=True)
 
 
 def test_init_and_cleanup():
@@ -20,18 +15,6 @@ def test_init_and_cleanup():
         if mosq:
             libmosq.mosquitto_destroy(mosq)
         libmosq.mosquitto_lib_cleanup()
-
-
-def test_call():
-    text = b"test"
-    ret = call(libc.printf, text)
-    assert ret == len(text)
-
-
-def test_call_error():
-    with pytest.raises(OSError) as e:
-        call(libc.read, C.byref(C.c_int()), use_errno=True)
-    assert e.value.errno == errno.EBADF
 
 
 def test_strerror():
